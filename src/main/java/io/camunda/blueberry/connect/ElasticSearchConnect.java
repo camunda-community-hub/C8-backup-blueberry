@@ -16,6 +16,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -276,6 +281,37 @@ public class ElasticSearchConnect implements BackupComponentInt {
 
     @Override
     public List<BackupInfo> getListBackups() throws OperationException {
-        return List.of();
+
+        String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/_all";
+        try {
+            // http://localhost:9200/_snapshot/camunda_zeebe_records_backup/_all?pretty
+            ResponseEntity<JsonNode> response = restTemplate.getForEntity(urlComplete, JsonNode.class);
+
+            if (!response.getStatusCode().is2xxSuccessful())
+                throw new OperationException(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, response.getStatusCode().value(), "Can't access ES", "Can't access ES");
+
+            JsonNode jsonNode = response.getBody();
+            JsonNode snapshots = jsonNode.path("snapshots");
+            List<BackupInfo> listBackups = new ArrayList<>();
+            for (JsonNode snapshot : snapshots) {
+                BackupInfo backupInfo = new BackupInfo();
+
+                String state = snapshot.path("state").asText();
+                backupInfo.status = "SUCCESS".equals(state)? BackupInfo.Status.COMPLETED: BackupInfo.Status.FAILED;
+                backupInfo.backupId = snapshot.path("snapshot").asInt();
+                backupInfo.components.add(CamundaApplicationInt.COMPONENT.ZEEBERECORD);
+                // search the date in the first partition
+                // value is 2025-05-29T00:16:55.622+0000
+                String timestamp = snapshot.path("start_time").asText();
+                backupInfo.backupTime = Instant.parse(timestamp)
+                        .atZone(ZoneId.systemDefault()) // Use your system's time zone
+                        .toLocalDateTime();
+                listBackups.add(backupInfo);
+            }
+            return listBackups;
+        } catch (Exception e) {
+            logger.error("Can't call [{}] error {}", urlComplete, e);
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "Error url[" + urlComplete + "] : " + e.getMessage());
+        }
     }
 }

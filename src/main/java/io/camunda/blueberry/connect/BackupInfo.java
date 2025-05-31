@@ -17,6 +17,8 @@ public class BackupInfo {
 
     public List<Details> details;
 
+    public long getBackupId(){return backupId;}
+
     public static class Details {
         private String snapshotName;
         private String state;

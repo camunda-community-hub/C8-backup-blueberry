@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -124,7 +125,10 @@ public class BackupManager {
             }
         }
 
-        return mergedList;
+        List<BackupInfo> sortedList = mergedList.stream()
+                .sorted(Comparator.comparingLong(BackupInfo::getBackupId))
+                .toList();
+        return sortedList;
     }
 
     /**

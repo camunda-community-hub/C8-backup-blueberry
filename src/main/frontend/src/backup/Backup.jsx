@@ -187,7 +187,6 @@ class Backup extends React.Component {
                         <th>ID</th>
                         <th>Status</th>
                         <th>Components</th>
-                        <th>Name</th>
                         <th>Date</th>
                     </tr>
                     </thead>
@@ -203,7 +202,6 @@ class Backup extends React.Component {
                                     <Tag key={index} type="blue">{component}</Tag>
                                 ))}
                             </td>
-                            <td>{content.backupName}</td>
                             <td>{content.backupTime}</td>
                         </tr>
                     ) : <div/>
