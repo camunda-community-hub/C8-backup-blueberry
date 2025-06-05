@@ -18,7 +18,7 @@
 
         <!-- versin in https://central.sonatype.com/artifact/io.camunda.connector/connector-validation/versions -->
         <!--Version 8.3.0-->
-        <version.zeebe>8.6.5</version.zeebe>
+        <version.zeebe>8.7.5</version.zeebe>
         <!--Version 8.3.3-->
         <!-- <version.zeebe-client>8.5.5</version.zeebe-client> -->
         <!--Version 8.3.1-->
