@@ -2,11 +2,11 @@
 
 Connect to AWS and go to S3
 
-![AWSS3.png](image/AWSS3.png)
+![AWSS3.png](images/AWSS3.png)
 
 Create an Amazon S3 bucket
 
-![AWSCreateBucket.png](image/AWSCreateBucket.png)
+![AWSCreateBucket.png](images/AWSCreateBucket.png)
 
 Give your bucket a name like `joeyzeebebackupbucket`
 

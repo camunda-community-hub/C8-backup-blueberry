@@ -63,7 +63,7 @@ curl -X POST "http://localhost:9600/actuator/exporting/resume"  -H 'Content-Type
 
 Some files must be visible on the storage
 
-![ZeebeBucketContent.png](image/ZeebeBucketContent.png)
+![ZeebeBucketContent.png](images/ZeebeBucketContent.png)
 
 # Elasticsearch
 
@@ -193,7 +193,7 @@ curl -X PUT http://localhost:9200/_snapshot/zeeberecordrepository/backup_1 -H 'C
 
 An answer {“accepted”:true}, and a folder is created on the bucket
 
-![ZeebeRecordBackupAWS.png](image/ZeebeRecordBackupAWS.png)
+![ZeebeRecordBackupAWS.png](images/ZeebeRecordBackupAWS.png)
 
 ** Restore**
 
@@ -240,7 +240,7 @@ curl -X POST http://localhost:9600/actuator/backups -H 'Content-Type: applicatio
 
 2. Check the bucket
 
-![ElasticSearchOperateBackupAWS.png](image/ElasticSearchOperateBackupAWS.png)
+![ElasticSearchOperateBackupAWS.png](images/ElasticSearchOperateBackupAWS.png)
 
 Get all snapshot on the repository
 

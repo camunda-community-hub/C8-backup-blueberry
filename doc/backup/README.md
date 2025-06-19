@@ -8,7 +8,7 @@ According to the documentation https://docs.camunda.io/docs/8.5/self-managed/ope
 
 In this example, the backup ID is `12`
 
-# 1. Optimize
+## Optimize
 
 1.1 Port forward the service
 ````shell
@@ -22,31 +22,35 @@ curl -X POST "http://localhost:8092/actuator/backups" \
 -d '{ "backupId": 12 }'
 ````
 
-Check the status
+1.3 Check the status:
 ````shell
 curl -X GET "http://localhost:8092/actuator/backups/12"
 ````
 
-wait for an answer COMPLETE
+Wait for an answer COMPLETE
 ```json
 {"backupId":12,"failureReason":null,"state":"COMPLETED"}
 ```
 
 
-# operate
+## Operate
+
+2.1 Port forward the service
+
 ````shell
 kubectl port-forward svc/camunda-operate 9600:9600 -n camunda
 ````
 
-Start the backup
+2.2 Start the backup:
+
 ````shell
 curl -X POST 'http://localhost:9600/actuator/backups' \
 -H 'Content-Type: application/json' \
 -d '{ "backupId": 12 }'
 ````
 
+2.3 Check the status:
 
-Check the status
 ````shell
 curl -X GET "http://localhost:9600/actuator/backups/12"
 ````
@@ -57,13 +61,15 @@ Wait for the status COMPLETED
 {"backupId":12,"state":"COMPLETED"}
 ```
 
-# tasklist
+# Tasklist
+
+3.1 Port forward the service
 
 ````shell
 kubectl port-forward svc/camunda-tasklist 9600:9600 -n camunda
 ````
 
-Start the backup
+3.2 Start the backup:
 ````shell
 curl -X POST 'http://localhost:9600/actuator/backups' \
 -H 'Content-Type: application/json' \
@@ -71,7 +77,7 @@ curl -X POST 'http://localhost:9600/actuator/backups' \
 ````
 
 
-Check the status
+3.3 Check the status:
 ````shell
 curl -X GET "http://localhost:9600/actuator/backups/12"
 ````
@@ -87,31 +93,31 @@ Wait for the status COMPLETED
 
 There are two operations in Zeebe: zeeberecord (on ElasticSearch) and Zeebe itself.
 
-Port-forward the server
+4.1 Port-forward the service:
 ```shell
 kubectl port-forward svc/camunda-zeebe-gateway 9600:9600 -n camunda
 kubectl port-forward svc/camunda-elasticsearch 9200:9200 -n camunda
 ```
 
-1. pause the exporting
+4.2 Pause the exporting
 
 ```shell
 curl -X POST "http://localhost:9600/actuator/exporting/pause"   -H 'Content-Type: application/json'    -d '{}'
 ```
 
-2. Backup zeebe record
+4.3 Backup zeebe record
 
 ```shell
 curl -X PUT http://localhost:9200/_snapshot/zeeberecordrepository/12 -H 'Content-Type: application/json'   \
 -d '{ "indices": "zeebe-record*", "feature_states": ["none"]}'
 ```
 
-3. backup Zeebe 
+4.4 Backup Zeebe 
 ```shell
 curl -X POST "http://localhost:9600/actuator/backups"  -H 'Content-Type: application/json'  -d "{\"backupId\": \"12\"}"
 ```
 
-4. Monitor the backup
+4.5 Monitor the backup
 ```shell
 curl -s "http://localhost:9600/actuator/backups/12"
 ```
@@ -120,7 +126,7 @@ wait for the status
 {"backupId":12,"state":"COMPLETED"}
 ```
 
-5. Resume Zeebe
+4.6 Resume Zeebe
 
 ```shell
 curl -X POST "http://localhost:9600/actuator/exporting/resume"  -H 'Content-Type: application/json'    -d '{}'

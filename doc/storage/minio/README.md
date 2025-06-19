@@ -13,9 +13,9 @@ Camunda 8.4 does not support Azure Blob Storage directly for backup. As a workar
 
 ---
 
-## 🛠️ Setup and Configuration
+# 🛠️ Setup and Configuration
 
-### 1. Deploy MinIO via Helm
+## 1. Deploy MinIO via Helm
 
 Create a `minio-values.yaml`:
 
@@ -35,9 +35,9 @@ helm install minio oci://registry-1.docker.io/bitnamicharts/minio -f minio-value
 
 ---
 
-### 2. Configure Camunda Helm Chart (`camunda-values.yaml`)
+## 2. Configure Camunda Helm Chart (`camunda-values.yaml`)
 
-#### Operate, Tasklist, Optimize:
+### Operate, Tasklist, Optimize:
 
 ```yaml
 operate:
@@ -56,7 +56,7 @@ optimize:
       value: "optimize-backup"
 ```
 
-#### Zeebe:
+### Zeebe:
 
 ```yaml
 zeebe:
@@ -77,7 +77,7 @@ zeebe:
       value: "us-east-1"
 ```
 
-#### Elasticsearch Keystore:
+### Elasticsearch Keystore:
 
 ```yaml
 elasticsearch:
@@ -97,7 +97,7 @@ elasticsearch:
 
 ---
 
-### 3. Upgrade Camunda
+## 3. Upgrade Camunda
 
 ```bash
 helm upgrade camunda camunda/camunda-platform -f camunda-values.yaml --version <your-version>
@@ -105,7 +105,7 @@ helm upgrade camunda camunda/camunda-platform -f camunda-values.yaml --version <
 
 ---
 
-### 4. Register Elasticsearch Snapshot Repositories
+## 4. Register Elasticsearch Snapshot Repositories
 
 Run for each bucket:
 
@@ -125,9 +125,9 @@ curl -X PUT "http://<elasticsearch-host>:9200/_snapshot/<bucket>" -H 'Content-Ty
 
 ---
 
-## 💾 Performing Backups
+# 💾 Performing Backups
 
-### 1. Operate, Tasklist, Optimize
+## 1. Operate, Tasklist, Optimize
 
 Port-forward each service’s actuator port and call the backup endpoint:
 
@@ -138,7 +138,7 @@ POST /actuator/backups
 }
 ```
 
-### 2. Zeebe Backup
+## 2. Zeebe Backup
 
 Port-forward Zeebe gateway actuator and Pause the Zeebe Exporter:
 
@@ -163,9 +163,9 @@ curl -X POST "http://camunda-zeebe-gateway:9600/actuator/exporting/resume" \
 ```
 ---
 
-## 🔁 Restore Procedure
+# 🔁 Restore Procedure
 
-### 1. Scale Down All Components
+## 1. Scale Down All Components
 
 ```bash
 kubectl scale sts/camunda-zeebe --replicas=0
@@ -175,7 +175,7 @@ kubectl scale deploy/camunda-tasklist --replicas=0
 kubectl scale deploy/camunda-optimize --replicas=0
 ```
 
-### 2. Re-register Snapshot Repositories
+## 2. Re-register Snapshot Repositories
 
 Re-run the registration curl commands for each bucket.
 ```bash
@@ -194,7 +194,7 @@ curl -X PUT "http://camunda-elasticsearch:9200/_snapshot/$bucket" -H 'Content-Ty
 ```
 ---
 
-### 3. Delete Elasticsearch Indices
+## 3. Delete Elasticsearch Indices
 
 ```bash
 curl -X DELETE "<elasticsearch-endpoint>/_cat/indices?h=index"
@@ -202,7 +202,7 @@ curl -X DELETE "<elasticsearch-endpoint>/_cat/indices?h=index"
 
 ---
 
-### 4. Restore Snapshots
+## 4. Restore Snapshots
 
 ```bash
 curl -X POST "<elasticsearch-endpoint>/_snapshot/<repository>/<snapshot>/_restore?wait_for_completion=true"
@@ -210,7 +210,7 @@ curl -X POST "<elasticsearch-endpoint>/_snapshot/<repository>/<snapshot>/_restor
 
 ---
 
-### 5. Restore Zeebe
+## 5. Restore Zeebe
 
 Shell into each Zeebe broker pod:
 
@@ -226,7 +226,7 @@ Then run:
 
 ---
 
-### 6. Scale Up Components
+## 6. Scale Up Components
 
 ```bash
 kubectl scale sts/camunda-zeebe --replicas=<replica-count>
@@ -238,7 +238,7 @@ kubectl scale deploy/camunda-optimize --replicas=<replica-count>
 
 ---
 
-## 📁 Reference Files
+# 📁 Reference Files
 
 - [camunda-values.yaml](https://github.com/camunda-consulting/c8-devops-workshop/blob/main/03%20-%20Lab%203%20-%20Backup%20and%20Restore/camunda-values.yaml)
 - [minio-values.yaml](https://github.com/camunda-consulting/c8-devops-workshop/blob/main/03%20-%20Lab%203%20-%20Backup%20and%20Restore/minio-values.yaml)

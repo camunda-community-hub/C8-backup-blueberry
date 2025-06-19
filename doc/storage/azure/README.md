@@ -12,12 +12,12 @@ Check the [Prerequisite](AzurePrerequisite.md)
 
 Zeebe is connected directly to the Azure container. It will save the backup at the root folder in the container.
 
-![Principle Zeebe](image/PrincipleZeebe.png)
+![Principle Zeebe](images/PrincipleZeebe.png)
 
 Operate, TaskList, Optimize run the backup on Elastic search. They ask Elastic search to back up the correct index on a repository (this repository is a parameter on Operate).
 The repository is configured in Elasticsearch, pointing to the container in Azure. This configuration (create the repository) must be done in advance in Elasticsearch
 
-![Principle Operate](image/PrincipleOperate.png)
+![Principle Operate](images/PrincipleOperate.png)
 
 # Connection via an account name / account key
 

@@ -11,7 +11,7 @@ Assign a Role to the Managed Identity:
 Create an IAM role
 On the storage account, access the `Access Control IAM` 
 
-![Add access role](image/Add_IAM_AccessCotrnol.png)
+![Add access role](images/Add_IAM_AccessCotrnol.png)
 
 Under Access Control (IAM), click Add and assign the appropriate role. 
 `Storage Blob Data Reader`, `Storage Blob Data Contributor` are necessary for the pod to create a backup

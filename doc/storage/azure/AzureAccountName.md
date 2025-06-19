@@ -65,11 +65,11 @@ curl -X POST "http://localhost:9600/actuator/exporting/resume"  -H 'Content-Type
 
 Some files must be visible on the storage
 
-![Container after Zeebe backup](image/ZeebeContainerContent.png)
+![Container after Zeebe backup](images/ZeebeContainerContent.png)
 
 Under folder 1, a folder 8 is visible (8 is the backup ID)
 
-![Detail of the container after Zeebe backup](image/ZeebeContainerDetail.png)
+![Detail of the container after Zeebe backup](images/ZeebeContainerDetail.png)
 
 
 
@@ -243,7 +243,7 @@ curl -X PUT http://localhost:9200/_snapshot/zeeberecordrepository/backup_1 -H 'C
 
 An answer {“accepted”:true}, and a folder is created on the container
 
-![Container after zeebe record backup](image/ElasticSearchZeebeRecordBackup.png)
+![Container after zeebe record backup](images/ElasticSearchZeebeRecordBackup.png)
 
 
 ** Restore**
@@ -291,7 +291,7 @@ curl -X POST http://localhost:9600/actuator/backups -H 'Content-Type: applicatio
 
 2.16 Check the container
 
-![Container after Operate backup.png](image/ElasticSearchOperateBackup.png)
+![Container after Operate backup.png](images/ElasticSearchOperateBackup.png)
 
 Get all snapshot on the repository
 

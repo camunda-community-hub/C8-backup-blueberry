@@ -1,9 +1,9 @@
 # Development
 
 ## Compilation
-The project contains two part
+The project contains two parts
 * an SpringBoot application
-* a react application
+* a React application
 
 Run
 ```shell
@@ -13,14 +13,28 @@ on the root folder generate the React application, and the Java application.
 
 Start the springboot application `io.camunda.BlueberryApplication` and access the application via `localhost:9082`
 
-Note: there are multiple profile. Use any "dev" profile to connect.
+Note: there are multiple profiles. Use any "dev" profile to connect.
+
+## Connect a Kubernetes cluster
+The blueberry application connects a lot of components, on different port.
+
+```shell
+kubectl port-forward svc/camunda-optimize 9603:9600 -n camunda
+kubectl port-forward svc/camunda-operate 9601:9600 -n camunda
+kubectl port-forward svc/camunda-tasklist 9602:9600 -n camunda
+kubectl port-forward svc/camunda-zeebe-gateway 9600:9600 -n camunda
+kubectl port-forward svc/elasticsearch-master 9200:9200 -n camunda
+```
+
+## Accessing the "/actuator/env"
+See the section in the main README
 
 
-## Create the image
+# Create the image
 
 
 ## Create the Docker image
-Because the library contains Java and React script, to deploy it, the machine must have two environments
+Because the library contains Java and React scripts, to deploy it, the machine must have two environments
 
 .github/workflows/mvn-build.yml
 
@@ -76,7 +90,7 @@ or use
 
 
 ````
-docker build -t pierre-yves-monnet/blueberry:1.1.0 .
+docker build -t pierre-yves-monnet/blueberry:1.2.0 .
 ````
 
 The docker image is built using the Dockerfile present on the root level.
@@ -86,16 +100,16 @@ The docker image is built using the Dockerfile present on the root level.
 Push the image to the Camunda hub (you must be login first to the docker registry)
 
 ````
-docker tag pierre-yves-monnet/blueberry:1.1.0 ghcr.io/camunda-community-hub/blueberry:latest
-
+docker tag pierre-yves-monnet/blueberry:1.2.0 ghcr.io/camunda-community-hub/blueberry:latest
+docker push ghcr.io/camunda-community-hub/blueberry:1.2.0
 docker push ghcr.io/camunda-community-hub/blueberry:latest
 ````
 
 
 Tag as the latest:
 ````
-docker tag pierre-yves-monnet/blueberry:1.1.0 ghcr.io/camunda-community-hub/blueberry:latest
-docker tag pierre-yves-monnet/blueberry:1.1.0 ghcr.io/camunda-community-hub/blueberry:1.1.0
+docker tag pierre-yves-monnet/blueberry:1.2.0 ghcr.io/camunda-community-hub/blueberry:latest
+docker tag pierre-yves-monnet/blueberry:1.2.0 ghcr.io/camunda-community-hub/blueberry:1.2.0
 docker push ghcr.io/camunda-community-hub/blueberry:latest
 ````
 

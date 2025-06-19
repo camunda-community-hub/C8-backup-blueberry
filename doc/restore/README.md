@@ -2,17 +2,32 @@
 
 This procedure explains the restoration procedure.
 
-Thanks to the project https://github.com/ManuelDittmar/backup-restore-demo
+Thanks to the project https://github.com/ManuelDittmar/backup-restore-demo.
 
-# 1. Preparation
+The documentation is accessible https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/backup-and-restore/#restore
 
-This preparation has to be done one time. It consist to create one restore file per ClusterSize.
+
+
+# Preparation
+
+This preparation has to be done one time. It consists of create one restore file per ClusterSize.
 If you have clusterSize = 3, tou have 3 pods, then 3 PVC to restore.
 
+When a HTTP request is sent via a RESTAPI, the gateway sends the order to each pod. Each pod backup (copy) the file to the container.
+
+![Zeebe Backup request](images/zeebe-backup-request.png)
+
+The restoration works differently. A software `/bin/restore` is provided in each pod. It has to be called.
+
+* Zeebe pods must be stopped, 
+* One restore execution must be performed per PVC. This is not an HTTP request, but a new software to execute, pod per pod.
+
+![Zeebe restore request](images/zeebe-restore-request.png)
 
 > Attention: if you change the cluster configuration, adding one more pod for example, it is important to use the same parameter as you use during the backup. Let say that you add a pod on, may 10, but the backup you want to restore was created on May 5, with cluster size=3. 
 > This is crucial to use the 3 YAML files restore.
  
+
 
 ## Prep.1 Creates files from the template
 
@@ -21,7 +36,7 @@ Let say you have a cluster ClusterSize=3.
 **You must create 3 files from the template** `zeebe-restore-job-0.yaml`, `zeebe-restore-job-1.yaml`, `zeebe-restore-job-2.yaml`
 
 
-## Prep.2 Replace the image
+## Prep.2 Replaces the image
 
 Check the image, and set the exact same image where the backup was performed:
 
@@ -50,7 +65,7 @@ For example,
 ## Prep.4 Partitions, ClusterSize, Replication factor
 
 Replace all others TODO with the correct information.
-Remember: these information must match the backup, not the current cluster if the configuration change between the backup and the current cluster.
+Remember: this information must match the backup, not the current cluster if the configuration change between the backup and the current cluster.
 
 ```
         - name: ZEEBE_BROKER_CLUSTER_PARTITIONSCOUNT
@@ -102,9 +117,9 @@ For example, for an Azure storage:
 
 # Restore
 
-## 1. backupID
+## BackupID
 
-The backupId is retrieved from the same secret as Elasticsearch.
+In the configuration file, the backupID is retrieved from a secret. For example:
 ````
         - name: ZEEBE_RESTORE_FROM_BACKUP_ID
           valueFrom:
@@ -113,14 +128,20 @@ The backupId is retrieved from the same secret as Elasticsearch.
               key: backupTimeId
  ````
 
+So, the first step consists of creating this secret and save the backupId to restore
+
+1.1 Create the secret with the backupID
+
+```shell
+kubectl create secret generic backup-timeid --from-literal=backupTimeId=12
+```
 
 
+## Get the configuration
 
-## 2. Get the configuration
+> Attention: what is important is the values when the backup was created. Assuming values does not change.
 
-> Attentio: what is important is the values when the backup was created. Assuming the values does not changed.
-
-Run a get pods to inspect the current situation
+2.1 Run a get pods to inspect the current situation
 
 ```shell
 kubectl get pods
@@ -148,14 +169,17 @@ And check how many instances are on each component.
 | TaskList     |                   1 |
 
 
-Check if all repositories exist in Elasticsearch. This configuration must be executed if you start from an empty database.
+2.2 Check if all repositories exist in Elasticsearch. This configuration must be executed if you start from an empty database.
 
 ```shell
 curl -X GET "http://localhost:9200/_snapshot/_all?pretty"
 ```
 
-## 3. Scale down components
+## cale down components
 The idea is to stop all components but keep the PCV.
+
+3.1 Execute these commands:
+
 ```shell
 kubectl scale sts/camunda-zeebe --replicas=0
 kubectl scale deploy/camunda-zeebe-gateway --replicas=0
@@ -164,7 +188,7 @@ kubectl scale deploy/camunda-tasklist --replicas=0
 kubectl scale deploy/camunda-optimize --replicas=0
 ```
 
-Only Elasticsearch is up and running now.
+3.2 Only Elasticsearch is up and running now.
 
 ```shell
 kubectl get pods
@@ -176,63 +200,63 @@ camunda-elasticsearch-master-2          1/1     Running   0          3m19s
 ```
 
 
-## 4. Delete all indexes in Elastic search
+## Delete all indexes in Elastic search
 When Operate, Tasklist, and Optimize start, they create indexes. It must be purged.
 
-In the k8 folder, an es-delete-all-indices.yaml file is present. This Kubernetes file creates a pod that executes this deletion.
+In the k8 folder, an `es-delete-all-indices.yaml` file is present. This Kubernetes file creates a pod that executes this deletion.
+
 The script is present under `doc/restore/k8`, so if needed, do a `cd` in that folder.
+
+4.1 Purge
 
 ```shell
 kubectl apply -f k8/es-delete-all-indices.yaml
 ```
 When the deletion is performed, the pod will stop and move to the state "Completed"
 
+4.2 Wait for the status:
+
 ```shell
 Kubernetes get pods
 es-delete-all-indices-job-bs2h9   0/1     Completed   0          18s
 ```
 
-## 5. Remove the deletion pod
+4.3 Delete the deletion pod
 
 ```shell
 kubectl delete -f es-delete-all-indices.yaml
 ```
 
-Run the command to verify that all indexes are deleted
+4.4 Run the command to verify that all indexes are deleted
+
 ```shell
 curl -X GET "http://localhost:9200/_cat/indices?v"
 health status index uuid pri rep docs.count docs.deleted store.size pri.store.size dataset.size
 ```
 The list must be empty.
 
-## 6. Setup the backup ID to restore
+## Restore Elasticsearch backup
 
-Put the backup ID to restore in a secret. We want to restore the backupID 12
-
-```shell
-kubectl create secret generic backup-timeid --from-literal=backupTimeId=12
-```
-
-## 7. Restore Elasticsearch backup
-Run the pod; the script is present in `doc/restore/k8`
+5.1 Run the pod; the script is present in `doc/restore/k8`
 
 ```shell
 kubectl apply -f es-snapshot-restore.yaml
 ```
 
-Monitor the execution. At the end, the pod status changed to Completed
+5.2 Monitor the execution. At the end, the pod status changed to `Completed`.
 
 ```shell
 kubernetes get pods
 es-snapshot-restore-job-pdvzz   0/1     Completed   0          18s
 ```
-## 8. Remove the restore pod
+
+5.3 Remove the restore pod
 
 ```shell
 kubectl delete -f es-snapshot-restore.yaml
 ```
 
-## 9. Check Elasticsearch: indexes must be restored.
+5.4 Check indexes are restored 
 
 ```shell
 curl -X GET "http://localhost:9200/_cat/indices?v"
@@ -270,15 +294,17 @@ green  open   operate-process-8.3.0_                    8hFENmo0TOCbtHWUweN-AA  
 
 
 
-## 10.  Restore Zeebe 
+## Restore Zeebe 
 
-Run each kubernetes file,  one by one
+6.1 Run each kubernetes file created during the preparation, one by one
+
 
 ```shell
 kubectl apply -f restore/zeebe-restore-job-XXXX.yaml
 ```
 
-Check logs on each pod.
+6.2 Check logs on each pod:
+
 ```
 2025-02-15 02:19:22.364 [] [] [] INFO 
       io.camunda.zeebe.restore.RestoreManager - Successfully restored partition 2 from backup 12. Backup description: BackupDescriptorImpl[snapshotId=Optional[9-1-12-10-2], checkpointPosition=62, numberOfPartitions=3, brokerVersion=8.6.9]
@@ -291,9 +317,10 @@ Check logs on each pod.
 Restoration complete.
 ```
 
-## 11. Scale back the application
 
-Use the value saved during the exploration to restart all components with the correct value.
+## Scale back the application
+
+7.1 Use the value saved during the exploration to restart all components with the correct value.
 
 ```shell
 kubectl scale sts/camunda-zeebe --replicas=3

@@ -2,20 +2,20 @@
 
 Connect to Azure and go to Storage Account
 
-![Azure Storage Account](image/AzureStorageAccount.png)
+![Azure Storage Account](images/AzureStorageAccount.png)
 
 Create a storage account
 
-![Create a storage account](image/AzureCreateStorageAccount.png)
+![Create a storage account](images/AzureCreateStorageAccount.png)
 
 Give a name like `pierreyvesstorageaccount`, choose a resource Group and select the appropriate cost Redundancy
 
-![Detail of the storage account](image/AzureDetailStorageAccount.png)
+![Detail of the storage account](images/AzureDetailStorageAccount.png)
 
  
 Access the key on the left menu, section `Security + networking`, section `access keys`
 
-![Azure Access key.png](image/AzureAccessKey.png)
+![Azure Access key.png](images/AzureAccessKey.png)
 
 Get the storage account connection string via the command line
 ```shell
