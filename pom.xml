@@ -27,7 +27,7 @@
 
         <!-- 2.7.4 -->
         <!-- According https://github.com/camunda-community-hub/spring-zeebe/blob/main/pom.xml -->
-        <version.spring.boot>3.3.0</version.spring.boot>
+        <version.spring.boot>3.5.0</version.spring.boot>
 
         <version.junit.jupiter>5.9.1</version.junit.jupiter>
         <version.opensagres>2.0.3</version.opensagres>
