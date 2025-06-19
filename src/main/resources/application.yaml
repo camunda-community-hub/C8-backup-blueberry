@@ -28,7 +28,7 @@ blueberry:
     zeebeRecordBasePath: zeeberecordbackup
 
     # Define the container used by Zeebe and by ElasticSearch
-  containerAzure:
+  container:
     containerType: azure
     azure:
       containerName: "YourAzureContainerName"

@@ -2,11 +2,7 @@ package io.camunda.blueberry.platform.rule;
 
 
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
-import io.camunda.blueberry.connect.ElasticSearchConnect;
-import io.camunda.blueberry.connect.KubernetesConnect;
-import io.camunda.blueberry.connect.OperationResult;
-import org.springframework.beans.factory.annotation.Autowired;
+import io.camunda.blueberry.connect.*;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,14 +14,22 @@ import java.util.List;
 public class RuleOptimizeRepository implements Rule {
 
 
-    @Autowired
-    BlueberryConfig blueberryConfig;
+    private final BlueberryConfig blueberryConfig;
 
-    @Autowired
-    KubernetesConnect kubernetesConnect;
+    private final KubernetesConnect kubernetesConnect;
 
-    @Autowired
-    ElasticSearchConnect elasticSearchConnect;
+
+    private final ElasticSearchConnect elasticSearchConnect;
+
+    private final AccessParameterValue accessParameterValue;
+
+    RuleOptimizeRepository(BlueberryConfig blueberryConfig, KubernetesConnect kubernetesConnect, ElasticSearchConnect elasticSearchConnect,
+                           OperateConnect operateConnect, AccessParameterValue accessParameterValue) {
+        this.blueberryConfig = blueberryConfig;
+        this.kubernetesConnect = kubernetesConnect;
+        this.elasticSearchConnect = elasticSearchConnect;
+        this.accessParameterValue = accessParameterValue;
+    }
 
     @Override
     public boolean validRule() {
@@ -70,17 +74,24 @@ public class RuleOptimizeRepository implements Rule {
 
         if (!validRule()) {
             return ruleInfo;
-        }            // ---------- First step, ask Operate for the name of the repository
+        }
+
+        // ---------- First step, ask Operate for the name of the repository
         ruleInfo.setStatus(RuleStatus.INPROGRESS);
-        String optimizeRepository = getRepositoryByConfiguration(ruleInfo);
+
+        AccessParameterValue.ResultParameter resultParameter = accessParameters();
+        ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Operate /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
+
+        String optimizeRepository = (String) resultParameter.parameters.get("optimizeRepository");
+
         if (optimizeRepository == null) {
             ruleInfo.setStatus(RuleStatus.FAILED);
         }
 
-        ruleInfo.addVerificationsAssertBoolean("Access pod repository, retrieve [" + optimizeRepository + "]", optimizeRepository != null,"From Configuration");
+        ruleInfo.addVerificationsAssertBoolean("Access pod repository, retrieve [" + optimizeRepository + "]", optimizeRepository != null, "From Configuration");
 
 
-                //------------ Second step, verify if the repository exists in elasticSearch
+        //------------ Second step, verify if the repository exists in elasticSearch
         if (ruleInfo.inProgress()) {
             OperationResult operationResult = elasticSearchConnect.existRepository(optimizeRepository);
             accessElasticsearchRepository = operationResult.resultBoolean;
@@ -89,7 +100,7 @@ public class RuleOptimizeRepository implements Rule {
                     accessElasticsearchRepository ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);
 
-                // if the repository exist, then we stop the rule execution here
+            // if the repository exist, then we stop the rule execution here
             if (accessElasticsearchRepository) {
                 ruleInfo.addDetails("Repository exist in Elastic search");
             } else {
@@ -118,7 +129,7 @@ public class RuleOptimizeRepository implements Rule {
 
                             + "] basePath[" + blueberryConfig.getOperateContainerBasePath()
                             + "] " + operationResult.details,
-                    operationResult.success? RuleStatus.CORRECT: RuleStatus.FAILED,
+                    operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);
 
         }
@@ -128,6 +139,10 @@ public class RuleOptimizeRepository implements Rule {
             ruleInfo.setStatus(RuleStatus.CORRECT);
         }
         return ruleInfo;
+    }
+
+    public AccessParameterValue.ResultParameter accessParameters() {
+        return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPTIMIZE, List.of("optimizeRepository"), blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env");
     }
 
     private String getRepositoryByConfiguration(RuleInfo ruleInfo) {

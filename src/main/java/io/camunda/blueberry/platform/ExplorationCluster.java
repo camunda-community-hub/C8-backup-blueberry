@@ -5,7 +5,6 @@ import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.platform.rule.Rule;
-
 import io.camunda.blueberry.platform.rule.RuleOperateRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -27,18 +26,38 @@ import java.util.stream.Collectors;
  */
 @Component
 public class ExplorationCluster {
-    Logger logger = LoggerFactory.getLogger(ExplorationCluster.class);
-
-
     private final KubernetesConnect kubernetesConnect;
-
     private final BlueberryConfig blueberryConfig;
-
     private final PlatformManager platformManager;
-
     private final RuleOperateRepository ruleOperateRepository;
-
     private final ZeebeConnect zeebeConnect;
+    Logger logger = LoggerFactory.getLogger(ExplorationCluster.class);
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  Exporter status                                                     */
+    /*                                                                      */
+    /* ******************************************************************** */
+    private Boolean exporterStatus;
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  backup list                                                         */
+    /*                                                                      */
+    /* ******************************************************************** */
+    private List<BackupInfo> listBackups;
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  ClusterInformation                                                  */
+    /*                                                                      */
+    /* ******************************************************************** */
+    private ZeebeConnect.ClusterInformation clusterInformation;
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  Repository per component                                           */
+    /*                                                                      */
+    /* ******************************************************************** */
+    private final Map<CamundaApplicationInt.COMPONENT, Object> repositoryPerComponent = new HashMap<>();
+    private String namespace = null;
+    private Rule.RuleStatus ruleStatus = null;
 
     public ExplorationCluster(KubernetesConnect kubernetesConnect,
                               BlueberryConfig blueberryConfig,
@@ -55,7 +74,6 @@ public class ExplorationCluster {
     public void refresh() {
         executeLongExploration();
     }
-
 
     @Scheduled(fixedRate = 300000)  // Run every 5 mn
     private void executeShortExploration() {
@@ -80,19 +98,13 @@ public class ExplorationCluster {
 
         executeLongExploration();
     }
+
     private void executeLongExploration() {
         executeShortExploration();
         refreshCheckRules();
         refeshRepositoryComponent();
         refreshClusterInformation();
     }
-
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  Exporter status                                                     */
-    /*                                                                      */
-    /* ******************************************************************** */
-    private Boolean exporterStatus;
 
     private Boolean refreshExporterStatus() {
         try {
@@ -108,13 +120,6 @@ public class ExplorationCluster {
         return exporterStatus;
     }
 
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  backup list                                                         */
-    /*                                                                      */
-    /* ******************************************************************** */
-    private List<BackupInfo> listBackups;
-
     private List<BackupInfo> refreshListBackup() {
         try {
             listBackups = zeebeConnect.getListBackups();
@@ -129,13 +134,6 @@ public class ExplorationCluster {
         return listBackups;
     }
 
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  ClusterInformation                                                  */
-    /*                                                                      */
-    /* ******************************************************************** */
-    private ZeebeConnect.ClusterInformation clusterInformation;
-
     private ZeebeConnect.ClusterInformation refreshClusterInformation() {
         clusterInformation = zeebeConnect.getClusterInformation();
         return clusterInformation;
@@ -144,14 +142,6 @@ public class ExplorationCluster {
     public ZeebeConnect.ClusterInformation getClusterInformation() {
         return clusterInformation;
     }
-
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  Repository per component                                           */
-    /*                                                                      */
-    /* ******************************************************************** */
-    private Map<CamundaApplicationInt.COMPONENT, Object> repositoryPerComponent = new HashMap<>();
-    private String namespace = null;
 
     private Map<CamundaApplicationInt.COMPONENT, Object> refeshRepositoryComponent() {
         // namespace never change, so when we get it, save it
@@ -179,6 +169,12 @@ public class ExplorationCluster {
         }
         return repositoryPerComponent;
     }
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  Rules status                                                        */
+    /*                                                                      */
+    /*  Keep status of rules check                                          */
+    /* ******************************************************************** */
 
     public OperationResult getRepositoryPerComponent() {
         OperationResult operationResult = new OperationResult();
@@ -190,14 +186,6 @@ public class ExplorationCluster {
                 ));
         return operationResult;
     }
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  Rules status                                                        */
-    /*                                                                      */
-    /*  Keep status of rules check                                          */
-    /* ******************************************************************** */
-
-    private Rule.RuleStatus ruleStatus = null;
 
     /**
      * Rules are valid?
@@ -215,7 +203,7 @@ public class ExplorationCluster {
         try {
             List<Rule.RuleInfo> listRules = platformManager.checkAllRules();
             // DEACTIVATE => INPROGRESS => CORRECT => FAILED
-             ruleStatus = Rule.RuleStatus.DEACTIVATED;
+            ruleStatus = Rule.RuleStatus.DEACTIVATED;
             for (Rule.RuleInfo ruleInfo : listRules) {
                 if (ruleInfo.getStatus() == Rule.RuleStatus.FAILED)
                     ruleStatus = Rule.RuleStatus.FAILED;

@@ -20,6 +20,7 @@ public interface Container {
 
     /**
      * Return information about the container, to display to the user to help him to debug the situation
+     *
      * @return
      */
     String getInformation();

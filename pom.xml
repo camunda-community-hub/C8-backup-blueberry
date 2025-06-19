@@ -6,9 +6,10 @@
     <!-- 1.0.0 First version -->
     <!-- 1.1.0 Add connection dashboard and review dashboard when no connection is possible to component. GCS is integrated -->
     <!-- 1.2.0 Add Current Backup message + refresh every 10 seconds + Explore backups All components (Operate, TaskList,Optimize, ZeebeRecord, Zeebe) to create an exhaustive list -->
+    <!-- 1.3.0 Use the operate/actuator/env if this is open -->
     <groupId>io.camunda.community</groupId>
     <artifactId>blueberry</artifactId>
-    <version>1.1.0</version>
+    <version>1.3.0</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -16,9 +17,10 @@
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <maven.compiler.source>${java.version}</maven.compiler.source>
 
-        <!-- versin in https://central.sonatype.com/artifact/io.camunda.connector/connector-validation/versions -->
+        <!-- version in https://central.sonatype.com/artifact/io.camunda.connector/connector-validation/versions -->
         <!--Version 8.3.0-->
-        <version.zeebe>8.6.5</version.zeebe>
+        <!-- 8.6.3 -->
+        <version.zeebe>8.6.3</version.zeebe>
         <!--Version 8.3.3-->
         <!-- <version.zeebe-client>8.5.5</version.zeebe-client> -->
         <!--Version 8.3.1-->
@@ -29,7 +31,7 @@
         <!-- According https://github.com/camunda-community-hub/spring-zeebe/blob/main/pom.xml -->
         <version.spring.boot>3.3.0</version.spring.boot>
 
-        <version.junit.jupiter>5.9.1</version.junit.jupiter>
+        <version.junit.jupiter>5.12.1</version.junit.jupiter>
         <version.opensagres>2.0.3</version.opensagres>
 
     </properties>
@@ -40,7 +42,7 @@
     <parent>
         <groupId>org.camunda.community</groupId>
         <artifactId>community-hub-release-parent</artifactId>
-        <version>1.4.2</version>
+        <version>1.4.4</version>
     </parent>
 
 
@@ -75,12 +77,12 @@
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
-            <version>2.13.4</version>
+            <version>2.19.0</version>
         </dependency>
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
-            <version>2.10</version>
+            <version>2.13.1</version>
         </dependency>
 
         <!-- Web -->
@@ -106,7 +108,7 @@
         <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-model</artifactId>
-            <version>3.8.4</version>
+            <version>3.9.9</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/com.h2database/h2 -->
@@ -123,7 +125,7 @@
         <dependency>
             <groupId>com.github.docker-java</groupId>
             <artifactId>docker-java</artifactId>
-            <version>3.3.4</version>
+            <version>3.5.1</version>
         </dependency>
 
 
@@ -157,7 +159,7 @@
             <plugin>
                 <groupId>com.github.eirslett</groupId>
                 <artifactId>frontend-maven-plugin</artifactId>
-                <version>1.12.1</version>
+                <version>1.15.1</version>
                 <configuration>
                     <workingDirectory>${project.basedir}/src/main/frontend</workingDirectory>
                     <installDirectory>${project.basedir}/target</installDirectory>
@@ -221,7 +223,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.2</version>
+                <version>3.5.3</version>
                 <dependencies>
                     <dependency>
                         <groupId>org.junit.platform</groupId>

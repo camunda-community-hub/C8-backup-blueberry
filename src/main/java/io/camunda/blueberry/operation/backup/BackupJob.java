@@ -18,7 +18,7 @@ public class BackupJob {
     private final ZeebeConnect zeebeConnect;
     private final ElasticSearchConnect elasticSearchConnect;
 
-    private OperationLog operationLog;
+    private final OperationLog operationLog;
     private JOBSTATUS jobStatus = JOBSTATUS.PLANNED;
     private long backupId;
 

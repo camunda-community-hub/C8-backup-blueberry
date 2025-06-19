@@ -20,12 +20,10 @@ import java.util.List;
  * Manage communication to OperateConnect
  */
 public class OperateConnect implements CamundaApplicationInt, BackupComponentInt {
-    Logger logger = LoggerFactory.getLogger(OperateConnect.class);
-
-
     private final BlueberryConfig blueberryConfig;
     private final WebActuator webActuator;
     private final KubenetesToolbox kubenetesToolbox;
+    Logger logger = LoggerFactory.getLogger(OperateConnect.class);
 
     public OperateConnect(BlueberryConfig blueberryConfig, RestTemplate restTemplate) {
         webActuator = new WebActuator(restTemplate);
@@ -72,7 +70,7 @@ public class OperateConnect implements CamundaApplicationInt, BackupComponentInt
 
 
     @Override
-    public CamundaApplicationInt.BackupOperation waitBackup(Long backupId, OperationLog operationLog)  throws BackupException {
+    public CamundaApplicationInt.BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
         return webActuator.waitBackup(CamundaApplicationInt.COMPONENT.OPERATE, backupId, blueberryConfig.getOperateActuatorUrl(), operationLog);
     }
 

@@ -3,11 +3,13 @@ package io.camunda.blueberry.api;
 
 import io.camunda.blueberry.platform.PlatformManager;
 import io.camunda.blueberry.platform.rule.Rule;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Comparator;
 import java.util.List;
@@ -31,7 +33,7 @@ public class ConfigurationRestController {
      * @return
      */
     @GetMapping(value = "/api/configuration/check", produces = "application/json")
-    public List<Map<@NotNull String, Object>> check() {
+    public List<Map<String, Object>> check() {
         try {
             logger.debug("Rest [/api/configuration/check]");
             List<Rule.RuleInfo> listRules = platformManager.checkAllRules();
@@ -52,7 +54,7 @@ public class ConfigurationRestController {
                                             return Map.of(
                                                     "action", tuple.action(),
                                                     "actionStatus", tuple.actionStatus().toString(),
-                                                    "command", tuple.command()==null? "": tuple.command()
+                                                    "command", tuple.command() == null ? "" : tuple.command()
                                             );
                                         })
                                         .toList());
@@ -65,7 +67,7 @@ public class ConfigurationRestController {
     }
 
     @PostMapping(value = "/api/configuration/configure", produces = "application/json")
-    public List<Map<@NotNull String, Object>> configure() {
+    public List<Map<String, Object>> configure() {
 
         try {
             logger.debug("Rest [/api/configuration/check]");
@@ -87,7 +89,7 @@ public class ConfigurationRestController {
                                             return Map.of(
                                                     "action", tuple.action(),
                                                     "actionStatus", tuple.actionStatus().toString(),
-                                                    "command", tuple.command()==null? "": tuple.command()
+                                                    "command", tuple.command() == null ? "" : tuple.command()
                                             );
                                         })
                                         .toList());

@@ -10,6 +10,7 @@ public class ContainerFactory {
 
     @Autowired
     List<Container> containers;
+
     public Container getContainerFromType(String containerType) {
         return containers.stream()
                 .filter(container -> containerType.equals(container.getType()))

@@ -1,9 +1,9 @@
 package io.camunda.blueberry.platform.rule;
 
 
+import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.ElasticSearchConnect;
 import io.camunda.blueberry.connect.OperationResult;
-import io.camunda.blueberry.config.BlueberryConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -105,7 +105,7 @@ public class RuleZeebeRecordRepository implements Rule {
                                 + "] ContainerType[" + blueberryConfig.getContainerType()
                                 + "] ContainerName[" + blueberryConfig.getAzureContainerName()
                                 + "] basePath[" + blueberryConfig.getZeebeRecordContainerBasePath() + "]",
-                        operationResult.success? RuleStatus.CORRECT: RuleStatus.FAILED,
+                        operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                         operationResult.command);
 
             }

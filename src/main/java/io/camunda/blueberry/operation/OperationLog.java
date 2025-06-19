@@ -27,7 +27,7 @@ public class OperationLog {
      * @param operationName      the operation name
      * @param totalNumberOfSteps total number of step expected
      */
-    public void startOperation( String operationName, int totalNumberOfSteps) {
+    public void startOperation(String operationName, int totalNumberOfSteps) {
         info(component, "Start operation [" + operationName + "] with " + totalNumberOfSteps + " steps");
         this.operationName = operationName;
         this.totalNumberOfSteps = totalNumberOfSteps;
@@ -42,15 +42,15 @@ public class OperationLog {
      */
     public void operationStep(CamundaApplicationInt.COMPONENT component, String stepName) {
         this.currentStep++;
-        this.stepName= stepName;
-        info(null,"Operation[" + operationName + "/" + stepName + "] : " + currentStep + "/" + totalNumberOfSteps);
+        this.stepName = stepName;
+        info(null, "Operation[" + operationName + "/" + stepName + "] : " + currentStep + "/" + totalNumberOfSteps);
     }
 
     public void operationStep(CamundaApplicationInt.COMPONENT component, int forceStep, String stepName) {
         this.component = component;
-        this.currentStep=forceStep;
-        this.stepName= stepName;
-        info(component,"Operation[" + operationName + "/" + stepName + "] : " + currentStep + "/" + totalNumberOfSteps);
+        this.currentStep = forceStep;
+        this.stepName = stepName;
+        info(component, "Operation[" + operationName + "/" + stepName + "] : " + currentStep + "/" + totalNumberOfSteps);
     }
 
     public void endOperation() {
@@ -58,7 +58,7 @@ public class OperationLog {
     }
 
     public void info(CamundaApplicationInt.COMPONENT component, String message) {
-        logger.info("Component:{} : {}",component, message);
+        logger.info("Component:{} : {}", component, message);
         Message msg = new Message();
         msg.type = Type.INFO;
         msg.message = message;
@@ -67,7 +67,7 @@ public class OperationLog {
         listMessages.add(msg);
     }
 
-    public void warning(CamundaApplicationInt.COMPONENT component,String message) {
+    public void warning(CamundaApplicationInt.COMPONENT component, String message) {
         logger.error(message);
         Message msg = new Message();
         msg.type = Type.WARNING;
@@ -117,7 +117,7 @@ public class OperationLog {
     }
 
     public String getComponent() {
-        return component==null? "": component.name();
+        return component == null ? "" : component.name();
     }
 
     enum Type {INFO, WARNING, ERROR}

@@ -16,7 +16,7 @@ public class RestorationJob {
      */
     public void restoration() {
         long beginTime = System.currentTimeMillis();
-        operationLog.startOperation("Start Restoration",9);
+        operationLog.startOperation("Start Restoration", 9);
 
         // restore Operate backup
 

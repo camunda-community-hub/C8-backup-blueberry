@@ -35,16 +35,12 @@ public interface Rule {
      * A rule is executed, and this is the information returned for this execution
      */
     class RuleInfo {
-        private boolean valid;
-        private StringBuilder details = new StringBuilder();
-        private StringBuilder errors  = new StringBuilder();
-        private RuleStatus status = RuleStatus.INPROGRESS;
         private final Rule rule;
-
-        public record Tuple(String action, RuleStatus actionStatus, String command) {
-        }
-
-        private List<Tuple> listVerifications = new ArrayList();
+        private boolean valid;
+        private final StringBuilder details = new StringBuilder();
+        private final StringBuilder errors = new StringBuilder();
+        private RuleStatus status = RuleStatus.INPROGRESS;
+        private final List<Tuple> listVerifications = new ArrayList();
 
         public RuleInfo(Rule rule) {
             this.rule = rule;
@@ -54,14 +50,13 @@ public interface Rule {
             return rule.getName();
         }
 
-
         public void addDetails(String details) {
             this.details.append(details + ";");
         }
+
         public void addError(String error) {
             this.errors.append(error + ";");
         }
-
 
         public String getDetails() {
             if (status == RuleStatus.DEACTIVATED) {
@@ -69,9 +64,11 @@ public interface Rule {
             }
             return details.toString();
         }
+
         public String getErrors() {
             return errors.toString();
         }
+
         public boolean isValid() {
             return valid;
         }
@@ -84,12 +81,12 @@ public interface Rule {
             return status;
         }
 
-        public boolean inProgress() {
-            return status == RuleStatus.INPROGRESS;
-        }
-
         public void setStatus(RuleStatus status) {
             this.status = status;
+        }
+
+        public boolean inProgress() {
+            return status == RuleStatus.INPROGRESS;
         }
 
         public List<Tuple> getListVerifications() {
@@ -99,9 +96,11 @@ public interface Rule {
         public void addVerifications(String action, RuleStatus actionStatus, String command) {
             this.listVerifications.add(new Tuple(action, actionStatus, command));
         }
+
         public void addVerificationsAssertBoolean(String action, boolean status, String command) {
-            this.listVerifications.add(new Tuple(action, status? RuleStatus.CORRECT: RuleStatus.FAILED, command));
+            this.listVerifications.add(new Tuple(action, status ? RuleStatus.CORRECT : RuleStatus.FAILED, command));
         }
+
         public void addVerificationsButWillBeFixed(String action, RuleStatus actionStatus, String command) {
             if (actionStatus.equals(RuleStatus.FAILED)) {
                 actionStatus = RuleStatus.FAILEDBUTWILLBEFIXED;
@@ -109,9 +108,11 @@ public interface Rule {
             this.listVerifications.add(new Tuple(action, actionStatus, command));
         }
 
-
         public Rule getRule() {
             return this.rule;
+        }
+
+        public record Tuple(String action, RuleStatus actionStatus, String command) {
         }
     }
 }

@@ -3,7 +3,6 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,17 +13,24 @@ import java.util.List;
 @Component
 public class RuleOperateRepository implements Rule {
 
+    private final BlueberryConfig blueberryConfig;
 
-    @Autowired
-    BlueberryConfig blueberryConfig;
+    private final KubernetesConnect kubernetesConnect;
 
-    @Autowired
-    KubernetesConnect kubernetesConnect;
+    private final ElasticSearchConnect elasticSearchConnect;
 
-    @Autowired
-    ElasticSearchConnect elasticSearchConnect;
-    @Autowired
-    private OperateConnect operateConnect;
+    private final OperateConnect operateConnect;
+
+    private final AccessParameterValue accessParameterValue;
+
+    RuleOperateRepository(BlueberryConfig blueberryConfig, KubernetesConnect kubernetesConnect, ElasticSearchConnect elasticSearchConnect,
+                          OperateConnect operateConnect, AccessParameterValue accessParameterValue) {
+        this.blueberryConfig = blueberryConfig;
+        this.kubernetesConnect = kubernetesConnect;
+        this.elasticSearchConnect = elasticSearchConnect;
+        this.operateConnect = operateConnect;
+        this.accessParameterValue = accessParameterValue;
+    }
 
     @Override
     public boolean validRule() {
@@ -73,7 +79,12 @@ public class RuleOperateRepository implements Rule {
         // ---------- First step, ask Operate for the name of the repository
         // the rule is in progress
         ruleInfo.setStatus(RuleStatus.INPROGRESS);
-        String operateRepository = getRepositoryByConfiguration(ruleInfo);
+
+        AccessParameterValue.ResultParameter resultParameter = accessParameters();
+        ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Operate /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
+
+        String operateRepository = (String) resultParameter.parameters.get("operateRepository");
+
         if (operateRepository == null) {
             ruleInfo.setStatus(RuleStatus.FAILED);
         }
@@ -119,7 +130,7 @@ public class RuleOperateRepository implements Rule {
                             + "] ContainerType[" + blueberryConfig.getContainerType()
                             + "] ContainerName[" + blueberryConfig.getAzureContainerName()
                             + "] basePath[" + blueberryConfig.getOperateContainerBasePath() + "]",
-                    operationResult.success? RuleStatus.CORRECT: RuleStatus.FAILED,
+                    operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);
         }
         // Still in progress at this point? All is OK then
@@ -130,6 +141,11 @@ public class RuleOperateRepository implements Rule {
     }
 
 
+    public AccessParameterValue.ResultParameter accessParameters() {
+        return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPERATE, List.of("operateRepository"), blueberryConfig.getOperateActuatorUrl() + "/actuator/env");
+    }
+
+
     private String getRepositoryByConfiguration(RuleInfo ruleInfo) {
         ruleInfo.addDetails("Access RepositoryName from Blueberry configuration");
         return blueberryConfig.getOperateRepository();
@@ -137,6 +153,8 @@ public class RuleOperateRepository implements Rule {
 
     private String getRepositoryByOperateEnvironment(RuleInfo ruleInfo) {
         ruleInfo.addDetails("Access RepositoryName exploring Operate environment");
+
+
         return operateConnect.getBackupRepositoryName();
     }
 

@@ -16,31 +16,6 @@ public class BackupInfo {
     public Status status;
 
     public List<Details> details;
-
-    public long getBackupId(){return backupId;}
-
-    public static class Details {
-        private String snapshotName;
-        private String state;
-        private String startTime;
-        private List<String> failures;
-
-        public String getSnapshotName() {
-            return snapshotName;
-        }
-
-        public String getState() {
-            return state;
-        }
-
-        public String getStartTime() {
-            return startTime;
-        }
-
-        public List<String> getFailures() {
-            return failures;
-        }
-    }
     /**
      * Register which conmponent declare this backup
      */
@@ -75,5 +50,32 @@ public class BackupInfo {
         }
     }
 
+    public long getBackupId() {
+        return backupId;
+    }
+
     public enum Status {COMPLETED, FAILED, INPROGRESS, UNKNOWN, PARTIALBACKUP}
+
+    public static class Details {
+        private String snapshotName;
+        private String state;
+        private String startTime;
+        private List<String> failures;
+
+        public String getSnapshotName() {
+            return snapshotName;
+        }
+
+        public String getState() {
+            return state;
+        }
+
+        public String getStartTime() {
+            return startTime;
+        }
+
+        public List<String> getFailures() {
+            return failures;
+        }
+    }
 }

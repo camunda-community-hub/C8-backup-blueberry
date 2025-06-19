@@ -10,7 +10,6 @@ import io.camunda.blueberry.operation.OperationLog;
 import io.camunda.zeebe.client.ZeebeClient;
 import io.camunda.zeebe.client.ZeebeClientConfiguration;
 import io.camunda.zeebe.client.api.response.Topology;
-import io.camunda.zeebe.protocol.impl.encoding.BackupStatusResponse;
 import io.camunda.zeebe.spring.client.configuration.ZeebeClientConfigurationImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,16 +30,13 @@ import java.util.stream.StreamSupport;
 @Component
 public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     private final ObjectMapper objectMapper;
-
-
-    private ZeebeClient myZeebeClient;
-
-
     private final ZeebeClientConfigurationImpl zeebeClientConfiguration;
-    Logger logger = LoggerFactory.getLogger(ZeebeConnect.class);
     private final BlueberryConfig blueberryConfig;
     private final RestTemplate restTemplate;
     private final WebActuator webActuator;
+    Logger logger = LoggerFactory.getLogger(ZeebeConnect.class);
+    private ZeebeClient myZeebeClient;
+    private long lastTentativeConnection = 0;
 
     public ZeebeConnect(BlueberryConfig blueberryConfig, RestTemplate restTemplate, ObjectMapper objectMapper, ZeebeClientConfigurationImpl zeebeClientConfiguration) {
         super(restTemplate);
@@ -50,8 +46,6 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         this.objectMapper = objectMapper;
         this.zeebeClientConfiguration = zeebeClientConfiguration;
     }
-
-    private long lastTentativeConnection = 0;
 
     public boolean connection() {
         boolean isConnected = isConnected();
@@ -132,17 +126,6 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         return connection();
     }
 
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  getInformation                                                      */
-    /*                                                                      */
-    /* ******************************************************************** */
-    public class ClusterInformation {
-        public int clusterSize;
-        public int partitionsCount;
-        public int replicationFactor;
-    }
-
     public ClusterInformation getClusterInformation() {
         try {
             final Topology topology = myZeebeClient.newTopologyRequest().send().join();
@@ -189,16 +172,16 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             return str;
         return str.substring(0, 1).toLowerCase() + str.substring(1);
     }
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  Resume and pause                                                    */
-    /*                                                                      */
-    /* ******************************************************************** */
 
     public void pauseExporting(OperationLog operationLog) {
         ResponseEntity<String> pauseZeebeExporting = restTemplate.postForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/exporting/pause", new HashMap<>(), String.class);
         operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBE, "Pause Zeebe exporting");
     }
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  Resume and pause                                                    */
+    /*                                                                      */
+    /* ******************************************************************** */
 
     public void resumeExporting(OperationLog operationLog) {
         ResponseEntity<String> zeebeResumeResponse = restTemplate.postForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/exporting/resume", new HashMap<>(), String.class);
@@ -232,11 +215,6 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             throw OperationException.getInstanceFromException(OperationException.BLUEBERRYERRORCODE.STATUS_EXPORTER, e);
         }
     }
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  Backup section                                                      */
-    /*                                                                      */
-    /* ******************************************************************** */
 
     @Override
     public CamundaApplicationInt.BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
@@ -260,32 +238,37 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         }
         return backupOperation;
     }
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  Backup section                                                      */
+    /*                                                                      */
+    /* ******************************************************************** */
 
     @Override
     public CamundaApplicationInt.BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
         ObjectMapper objectMapper = new ObjectMapper();
         CamundaApplicationInt.BackupOperation backupOperation = new CamundaApplicationInt.BackupOperation();
 
-        int loopCount=0;
-        int timeToWait= 100;
-        long totalTimeToWait=0;
+        int loopCount = 0;
+        int timeToWait = 100;
+        long totalTimeToWait = 0;
 
-        while (true && loopCount<1000) {
+        while (loopCount < 1000) {
             logger.info("Checking backup status for URL {}", blueberryConfig.getZeebeActuatorUrl());
             loopCount++;
             if (totalTimeToWait > 3000) {
-                timeToWait=500;
+                timeToWait = 500;
             }
             if (totalTimeToWait > 10000) {
-                timeToWait=1000;
+                timeToWait = 1000;
             }
             if (totalTimeToWait > 30000) {
-                timeToWait=5000;
+                timeToWait = 5000;
             }
 
             try {
                 Thread.sleep(timeToWait);
-                totalTimeToWait+=timeToWait;
+                totalTimeToWait += timeToWait;
 
             } catch (InterruptedException e) {
                 // do nothing
@@ -315,26 +298,20 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         return backupOperation;
     }
 
-
-
-
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  Administration                                                      */
-    /*                                                                      */
-    /* ******************************************************************** */
-
     /**
      * https://docs.camunda.io/docs/8.7/self-managed/operational-guides/backup-restore/zeebe-backup-and-restore/#list-backups-api
      */
 
     @Override
     public List<BackupInfo> getListBackups() throws OperationException {
-        ResponseEntity<BackupStatusResponse> backupStatusResponse = null;
+        ResponseEntity<BackupInfo> backupStatusResponse = null;
         try {
             logger.debug("Execute [{}]", blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups");
             ResponseEntity<JsonNode> listResponse = restTemplate.getForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups", JsonNode.class);
             JsonNode jsonArray = listResponse.getBody();
+            if (jsonArray == null)
+                throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST,
+                        "No answer from [" + blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups]");
 
             List<BackupInfo> listBackupInfo = StreamSupport.stream(jsonArray.spliterator(), false)
                     .map(t -> {
@@ -360,6 +337,26 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         } catch (Exception e) {
             throw OperationException.getInstanceFromException(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, e);
         }
+    }
+
+
+
+
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  Administration                                                      */
+    /*                                                                      */
+    /* ******************************************************************** */
+
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  getInformation                                                      */
+    /*                                                                      */
+    /* ******************************************************************** */
+    public class ClusterInformation {
+        public int clusterSize;
+        public int partitionsCount;
+        public int replicationFactor;
     }
 
 

@@ -3,11 +3,15 @@ blueberry:
   operateActuatorUrl: http://localhost:9601
   tasklistActuatorUrl: http://localhost:9602
   zeebeActuatorUrl: http://localhost:9600
-  kubeConfigWindows: \\wsl$\Ubuntu\home\pym\config
-  kubeConfig2: \\wsl.localhost\Ubuntu\home\pym\.kube\config
   elasticsearchurl: http://localhost:9200
 
-  # This information are temporary. They must come from the pod itself
+  # This information is temporary. They must come from the pod itself
+  # kubectl port-forward svc/camunda-optimize 9603:9600 -n camunda &
+  # kubectl port-forward svc/camunda-operate 9601:9600 -n camunda  &
+  # kubectl port-forward svc/camunda-tasklist 9602:9600 -n camunda  &
+  # kubectl port-forward svc/camunda-zeebe-gateway 9600:9600 -n camunda  &
+  # kubectl port-forward svc/elasticsearch-master 9200:9200 -n camunda  &
+
   operateRepository: operaterepository
   tasklistRepository: tasklistrepository
   optimizeRepository : optimizerepository

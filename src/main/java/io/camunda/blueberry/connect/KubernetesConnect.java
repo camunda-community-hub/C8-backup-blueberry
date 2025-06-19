@@ -2,7 +2,6 @@ package io.camunda.blueberry.connect;
 
 
 import io.camunda.blueberry.config.BlueberryConfig;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -10,9 +9,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class KubernetesConnect {
+    private static final boolean NOT_IMPLEMENTED = true;
     Logger logger = LoggerFactory.getLogger(KubernetesConnect.class);
-
-    private static boolean NOT_IMPLEMENTED  = true;
     BlueberryConfig blueberryConfig;
 
     KubernetesConnect(BlueberryConfig blueberryConfig) {
@@ -126,24 +124,24 @@ public class KubernetesConnect {
      * @param nameSpace
      * @return
      */
-     /**
-    public OperationResult getRepositoryNameV2(CamundaApplicationInt.COMPONENT component, String nameSpace) {
-        OperationResult operationResult = new OperationResult();
-        List<Pod> pods = null;
-        try {
-            pods = getContainerInformation(component.name(), nameSpace);
-        } catch (KubernetesException e) {
+    /**
+     public OperationResult getRepositoryNameV2(CamundaApplicationInt.COMPONENT component, String nameSpace) {
+     OperationResult operationResult = new OperationResult();
+     List<Pod> pods = null;
+     try {
+     pods = getContainerInformation(component.name(), nameSpace);
+     } catch (KubernetesException e) {
 
-            operationResult.success = false;
-            return operationResult;
-        }
+     operationResult.success = false;
+     return operationResult;
+     }
 
-        for (Pod pod : pods) {
-            logger.info("Name{}", pod.getMetadata().getName());
-        }
-        return operationResult;
-    }
-      **/
+     for (Pod pod : pods) {
+     logger.info("Name{}", pod.getMetadata().getName());
+     }
+     return operationResult;
+     }
+     **/
 
     /* List all pods containing the name <podName> in a given namespace.
      * @param podName filter pods by the name (contains: a deployment add ID after the name)
@@ -153,49 +151,49 @@ public class KubernetesConnect {
      */
 
     /**
-    private List<Pod> getContainerInformation(String podName, String nameSpace) throws KubernetesException {
+     private List<Pod> getContainerInformation(String podName, String nameSpace) throws KubernetesException {
 
-        try {
-            // Namespace where the pods are running
+     try {
+     // Namespace where the pods are running
 
-            // Get all pods in the namespace
-            List<Pod> pods = client.pods().inNamespace(nameSpace).list().getItems();
+     // Get all pods in the namespace
+     List<Pod> pods = client.pods().inNamespace(nameSpace).list().getItems();
 
-            // Print pod names
-            for (Pod pod : pods) {
-                logger.info("Pods {}", pod.getMetadata().getName());
-            }
-            return pods;
-        } catch (Exception e) {
-            logger.error(e.getMessage());
-            throw new KubernetesException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Can't list pods", "Pods can't be listed in nameSpace[" + nameSpace + "] " + e.getMessage());
-        }
-    }
+     // Print pod names
+     for (Pod pod : pods) {
+     logger.info("Pods {}", pod.getMetadata().getName());
+     }
+     return pods;
+     } catch (Exception e) {
+     logger.error(e.getMessage());
+     throw new KubernetesException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Can't list pods", "Pods can't be listed in nameSpace[" + nameSpace + "] " + e.getMessage());
+     }
+     }
 
-    private void connectExplicitaly() {
-        String token = getAuthToken();
+     private void connectExplicitaly() {
+     String token = getAuthToken();
 
-        Config config = new ConfigBuilder()
-                .withMasterUrl("https://34.139.199.129")
-                .withOauthToken(token)
-                .build();
+     Config config = new ConfigBuilder()
+     .withMasterUrl("https://34.139.199.129")
+     .withOauthToken(token)
+     .build();
 
-        try {
-            client = new KubernetesClientBuilder().withConfig(config).build();
-            System.out.println("Connected to Kubernetes: " + client.getMasterUrl());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+     try {
+     client = new KubernetesClientBuilder().withConfig(config).build();
+     System.out.println("Connected to Kubernetes: " + client.getMasterUrl());
+     } catch (Exception e) {
+     e.printStackTrace();
+     }
+     }
 
-    private static String getAuthToken() {
-        try {
-            Process process = new ProcessBuilder("c/atelier/Gcloud/google-cloud-sdk/bin/gcloud", "auth", "print-access-token").start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            return reader.readLine();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to retrieve token", e);
-        }
-    }
+     private static String getAuthToken() {
+     try {
+     Process process = new ProcessBuilder("c/atelier/Gcloud/google-cloud-sdk/bin/gcloud", "auth", "print-access-token").start();
+     BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+     return reader.readLine();
+     } catch (Exception e) {
+     throw new RuntimeException("Failed to retrieve token", e);
+     }
+     }
      **/
 }

@@ -86,7 +86,7 @@ public class DashboardRestController {
             }
 
             BackupJob backupJob = backupManager.getBackupJob();
-            status.backup.statusBackup = clusterInformation==null? COMPONENT_NOT_CONNECTED : COMPONENT_READY;
+            status.backup.statusBackup = clusterInformation == null ? COMPONENT_NOT_CONNECTED : COMPONENT_READY;
             if (backupJob != null) {
                 status.backup.statusBackup = backupJob.getJobStatus().toString();
                 OperationLog operationLog = backupJob.getOperationLog();
@@ -114,7 +114,8 @@ public class DashboardRestController {
 
     @GetMapping(value = "/api/dashboard/checkConnection", produces = "application/json")
     public Map<String, Object> checkConnection() {
-        try {logger.debug("checkConnection [/api/dashboard/all]");
+        try {
+            logger.debug("checkConnection [/api/dashboard/all]");
             return Map.of("status", "",
                     "zeebe", toMap(zeebeConnect.isConnectedInformation()),
                     "zeebeActuator", toMap(zeebeConnect.isConnectedActuatorInformation()),
@@ -130,13 +131,13 @@ public class DashboardRestController {
                     "operate", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
                     "tasklist", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
                     "optimize", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS)
-                    );
+            );
         }
     }
 
-    private Map<String,Object> toMap(CamundaApplicationInt.ConnectionInfo connectionInfo) {
-        return Map.of("connection", connectionInfo.isConnected? COMPONENT_READY : COMPONENT_NOT_CONNECTED,
-        "explanation", connectionInfo.explanations);
+    private Map<String, Object> toMap(CamundaApplicationInt.ConnectionInfo connectionInfo) {
+        return Map.of("connection", connectionInfo.isConnected ? COMPONENT_READY : COMPONENT_NOT_CONNECTED,
+                "explanation", connectionInfo.explanations);
     }
 
     private class DashboardStatus {

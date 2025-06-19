@@ -1,6 +1,6 @@
 package io.camunda.blueberry.exception;
 
-public class ElasticsearchException  extends OperationException {
+public class ElasticsearchException extends OperationException {
     /**
      * @param blueberryErrorCode the Blueberry code, categorize the error
      * @param status             Http Status, returned by Zeebe or any other API called

@@ -148,7 +148,7 @@ public class BlueberryConfig {
     }
 
     public String getKubeConfig() {
-        return kubeConfig==null|| kubeConfig.trim().isEmpty()?null: kubeConfig;
+        return kubeConfig == null || kubeConfig.trim().isEmpty() ? null : kubeConfig;
     }
 
     public String getOperateRepository() {
@@ -188,9 +188,6 @@ public class BlueberryConfig {
     public String getGcsBasePath() {
         return gcsBasePath;
     }
-
-
-
 
 
     /**

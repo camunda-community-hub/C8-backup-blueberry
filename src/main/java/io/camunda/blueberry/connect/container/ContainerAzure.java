@@ -8,9 +8,11 @@ public class ContainerAzure implements Container {
 
     public static final String AZURE = "azure";
     BlueberryConfig blueberryConfig;
+
     ContainerAzure(BlueberryConfig blueberryConfig) {
         this.blueberryConfig = blueberryConfig;
     }
+
     @Override
     public String getType() {
         return AZURE;
@@ -19,7 +21,7 @@ public class ContainerAzure implements Container {
     @Override
     public String getElasticsearchPayload(String basePathInsideContainer) {
         String containerName = blueberryConfig.getAzureContainerName();
-        return  String.format("""
+        return String.format("""
                 {
                   "type": "%s",
                   "settings": {
@@ -33,6 +35,6 @@ public class ContainerAzure implements Container {
 
     public String getInformation() {
         String containerName = blueberryConfig.getAzureContainerName();
-        return "Container type["+AZURE+"] name["+containerName+"]";
+        return "Container type[" + AZURE + "] name[" + containerName + "]";
     }
 }

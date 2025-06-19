@@ -18,8 +18,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -205,7 +203,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
             logger.error("Exception in esBackup", e);
 
             backupOperation.title = e.getMessage();
-            backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.ZEEBERECORD.toString() + "] Url[" + urlComplete + "]" + e.getMessage();
+            backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.ZEEBERECORD + "] Url[" + urlComplete + "]" + e.getMessage();
             operationLog.error(CamundaApplicationInt.COMPONENT.ZEEBERECORD, "Error during backup ZeebeRecord " + e.getMessage());
         }
         return backupOperation;
@@ -249,7 +247,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
                 logger.error("Exception in esBackup", e);
                 backupOperation.status = 400;
                 backupOperation.title = e.getMessage();
-                backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.ZEEBERECORD.toString() + "] Url[" + urlComplete + "]" + e.getMessage();
+                backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.ZEEBERECORD + "] Url[" + urlComplete + "]" + e.getMessage();
 
                 return backupOperation;
             }
@@ -297,7 +295,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
                 BackupInfo backupInfo = new BackupInfo();
 
                 String state = snapshot.path("state").asText();
-                backupInfo.status = "SUCCESS".equals(state)? BackupInfo.Status.COMPLETED: BackupInfo.Status.FAILED;
+                backupInfo.status = "SUCCESS".equals(state) ? BackupInfo.Status.COMPLETED : BackupInfo.Status.FAILED;
                 backupInfo.backupId = snapshot.path("snapshot").asInt();
                 backupInfo.components.add(CamundaApplicationInt.COMPONENT.ZEEBERECORD);
                 // search the date in the first partition

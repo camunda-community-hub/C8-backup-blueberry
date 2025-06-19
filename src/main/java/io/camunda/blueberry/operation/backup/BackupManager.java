@@ -19,15 +19,14 @@ import java.util.Optional;
  */
 @Component
 public class BackupManager {
-    private final ElasticSearchConnect elasticSearchConnect;
-    Logger logger = LoggerFactory.getLogger(BackupManager.class);
     final OperateConnect operateConnect;
     final TaskListConnect taskListConnect;
     final OptimizeConnect optimizeConnect;
     final ZeebeConnect zeebeConnect;
-    private BackupJob backupJob;
-
+    private final ElasticSearchConnect elasticSearchConnect;
+    Logger logger = LoggerFactory.getLogger(BackupManager.class);
     List<BackupComponentInt> listBackupComponents;
+    private BackupJob backupJob;
 
     public BackupManager(OperateConnect operateConnect, TaskListConnect taskListConnect, OptimizeConnect optimizeConnect,
                          ZeebeConnect zeebeConnect, ElasticSearchConnect elasticSearchConnect,
@@ -91,12 +90,6 @@ public class BackupManager {
         return backupJob;
     }
 
-    public static class BackupParameter {
-        public boolean nextId;
-        public Long backupId;
-    }
-
-
     /**
      * Return the list of backup
      * All components are asking its backup, to establish a complete list
@@ -151,5 +144,10 @@ public class BackupManager {
         return referenceList;
 
 
+    }
+
+    public static class BackupParameter {
+        public boolean nextId;
+        public Long backupId;
     }
 }

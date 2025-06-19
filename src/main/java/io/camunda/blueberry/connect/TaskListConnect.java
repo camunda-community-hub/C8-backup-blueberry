@@ -1,8 +1,8 @@
 package io.camunda.blueberry.connect;
 
+import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.toolbox.KubenetesToolbox;
 import io.camunda.blueberry.connect.toolbox.WebActuator;
-import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
@@ -32,19 +32,23 @@ public class TaskListConnect implements CamundaApplicationInt {
     }
 
     public boolean isConnected() {
-        return webActuator.isConnected(COMPONENT.TASKLIST, blueberryConfig.getTasklistActuatorUrl()+"/actuator");
+        return webActuator.isConnected(COMPONENT.TASKLIST, blueberryConfig.getTasklistActuatorUrl() + "/actuator");
     }
+
     @Override
     public boolean isActive() {
         return blueberryConfig.getTasklistActuatorUrl() != null && blueberryConfig.getTasklistActuatorUrl().length() > 0;
     }
+
     /**
      * Return the connection information plus information on the way to connect, in order to give back more feedback
+     *
      * @return
      */
     public CamundaApplicationInt.ConnectionInfo isConnectedInformation() {
-        return new CamundaApplicationInt.ConnectionInfo(isConnected(),"Url Connection ["+blueberryConfig.getTasklistActuatorUrl()+"/actuator]");
+        return new CamundaApplicationInt.ConnectionInfo(isConnected(), "Url Connection [" + blueberryConfig.getTasklistActuatorUrl() + "/actuator]");
     }
+
     public COMPONENT getComponent() {
         return COMPONENT.TASKLIST;
     }
