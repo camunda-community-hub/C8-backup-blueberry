@@ -3,6 +3,7 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.exception.CommunicationException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
 @Component
 public class RuleTasklistRepository implements Rule {
 
+    public static final String TASKLIST_REPOSITORY = "tasklistRepository";
     private final BlueberryConfig blueberryConfig;
 
     private final KubernetesConnect kubernetesConnect;
@@ -78,10 +80,17 @@ public class RuleTasklistRepository implements Rule {
         // the rule is in progress
         ruleInfo.setStatus(RuleStatus.INPROGRESS);
 
-        AccessParameterValue.ResultParameter resultParameter = accessParameters();
+        AccessParameterValue.ResultParameter resultParameter;
+        try {
+            resultParameter = accessParameters();
+        } catch (CommunicationException e) {
+            ruleInfo.addError("Access RepositoryName exploring Optimize /actuator/env failed: can't connect TaskList");
+            ruleInfo.setStatus(RuleStatus.FAILED);
+            return ruleInfo;
+        }
         ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Operate /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
 
-        String taskListRepository = (String) resultParameter.parameters.get("taskListRepository");
+        String taskListRepository = (String) resultParameter.parameters.get(TASKLIST_REPOSITORY);
 
         if (taskListRepository == null) {
             ruleInfo.setStatus(RuleStatus.FAILED);
@@ -105,7 +114,7 @@ public class RuleTasklistRepository implements Rule {
             } else {
                 // if we don't execute the rule, we stop here on a failure
                 if (!execute) {
-                    ruleInfo.addDetails("Repository does not exist in Elastic search, and must be created");
+                    ruleInfo.addError("Repository does not exist in Elastic search, and must be created");
                     ruleInfo.setStatus(RuleStatus.FAILED);
                 }
             }
@@ -116,7 +125,7 @@ public class RuleTasklistRepository implements Rule {
         if (execute && ruleInfo.inProgress()) {
 
             OperationResult operationResult = elasticSearchConnect.createRepository(taskListRepository,
-                    blueberryConfig.getContainerType(),
+                    blueberryConfig.getZeebeContainerType(),
                     blueberryConfig.getTasklistContainerBasePath());
             if (operationResult.success) {
                 ruleInfo.addDetails("Repository is created in ElasticSearch");
@@ -125,11 +134,10 @@ public class RuleTasklistRepository implements Rule {
                 ruleInfo.setStatus(RuleStatus.FAILED);
             }
             ruleInfo.addVerifications("Check Elasticsearch repository [" + taskListRepository
-                            + "] basePath[" + blueberryConfig.getOperateContainerBasePath()
-                            + "] " + operationResult.details,
+                            + "] basePath[" + blueberryConfig.getTasklistContainerBasePath()
+                            + "] " + (operationResult.details == null ? "" : operationResult.details),
                     operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);
-
         }
         // Still in progress at this point? All is OK then
         if (ruleInfo.inProgress()) {
@@ -139,8 +147,15 @@ public class RuleTasklistRepository implements Rule {
     }
 
 
-    public AccessParameterValue.ResultParameter accessParameters() {
-        return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.TASKLIST, List.of("tasklistRepository"), blueberryConfig.getTasklistActuatorUrl() + "/actuator/env");
+    public AccessParameterValue.ResultParameter accessParameters() throws CommunicationException {
+        try {
+            return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.TASKLIST, List.of(TASKLIST_REPOSITORY), blueberryConfig.getTasklistActuatorUrl() + "/actuator/env");
+        } catch (CommunicationException e) {
+            AccessParameterValue.ResultParameter resultParameter = new AccessParameterValue.ResultParameter();
+            resultParameter.accessActuator = false;
+            resultParameter.parameters.put(TASKLIST_REPOSITORY, blueberryConfig.getOperateRepository());
+            return resultParameter;
+        }
     }
 
 

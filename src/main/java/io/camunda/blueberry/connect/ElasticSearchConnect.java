@@ -309,7 +309,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
             return listBackups;
         } catch (Exception e) {
             logger.error("Can't call [{}] error {}", urlComplete, e);
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "Error url[" + urlComplete + "] : " + e.getMessage());
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No Connection to ElasticSearch", "Error url[" + urlComplete + "] : " + e.getMessage());
         }
     }
 }

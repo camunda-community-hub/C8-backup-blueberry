@@ -32,8 +32,8 @@ public class OperationException extends Exception {
         this.message = message;
     }
 
-    public static OperationException getInstanceFromCode(BLUEBERRYERRORCODE blueberryErrorCode, String message) {
-        return new OperationException(blueberryErrorCode, 500, message, "");
+    public static OperationException getInstanceFromCode(BLUEBERRYERRORCODE blueberryErrorCode, String error, String message) {
+        return new OperationException(blueberryErrorCode, 500, error, message);
 
     }
 
@@ -97,5 +97,10 @@ public class OperationException extends Exception {
 
     }
 
-    public enum BLUEBERRYERRORCODE {BACKUP_LIST, BACKUP, CHECK, KUBERNETES_CLIENT, ELASTICSEARCH_CLIENT, STATUS_EXPORTER, NO_ZEEBE_CONNECTION}
+    public enum BLUEBERRYERRORCODE {
+        BACKUP_LIST, BACKUP, CHECK, KUBERNETES_CLIENT, ELASTICSEARCH_CLIENT, STATUS_EXPORTER, NO_ZEEBE_CONNECTION,
+        NO_OPERATE_CONNECTION,
+        NO_TASKLIST_CONNECTION,
+        NO_OPTIMIZE_CONNECTION
+    }
 }

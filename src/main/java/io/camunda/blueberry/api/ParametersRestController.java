@@ -44,6 +44,7 @@ public class ParametersRestController {
             allParameters.putAll(blueberryConfig.getAll());
             allParameters.putAll(zeebeConnect.getParameters());
 
+
             AccessParameterValue.ResultParameter resultParameter = ruleOperateRepository.accessParameters();
             allParameters.put("operateSource", resultParameter.accessActuator ? "Operate Actuator" : "Blueberry Configuration");
             allParameters.put("operateRepository", resultParameter.parameters.get("operateRepository"));

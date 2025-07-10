@@ -122,7 +122,10 @@ public class BackupRestController {
             result.put("listBackup", listBackupMap);
 
             return result;
-
+        } catch (OperationException oe) {
+            result.put("errorMessage", oe.getMessage());
+            result.put("error", oe.getError());
+            return result;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

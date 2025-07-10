@@ -2,7 +2,7 @@ blueberry:
   optimizeActuatorUrl: http://camunda-optimize:9600
   operateActuatorUrl: http://camunda-operate:9600
   tasklistActuatorUrl: http://camunda-tasklist:9600
-  zeebeActuatorUrl: http://camunda-zeebe-gateway:9600
+  zeebeActuatorUrl: http://camunda-zeebe:9600
   elasticsearchurl: http://camunda-elasticsearch:9200
 
   # This information is temporary. They must come from the pod itself
@@ -33,10 +33,11 @@ blueberry:
     azure:
       containerName: "YourAzureContainerName"
     s3:
-      bucket: "YourS3Bucket"
+      bucketName: "YourS3Bucket"
       region: "us-east-2"
     gcs:
-      bucket: "YourS3Bucket"
+      bucketName: "YourS3Bucket"
+      basePath: "zeebecontainer"
       region: "us-east-2"
 
 

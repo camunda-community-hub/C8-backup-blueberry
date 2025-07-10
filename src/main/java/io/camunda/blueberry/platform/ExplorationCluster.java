@@ -31,6 +31,12 @@ public class ExplorationCluster {
     private final PlatformManager platformManager;
     private final RuleOperateRepository ruleOperateRepository;
     private final ZeebeConnect zeebeConnect;
+    /* ******************************************************************** */
+    /*                                                                      */
+    /*  Repository per component                                           */
+    /*                                                                      */
+    /* ******************************************************************** */
+    private final Map<CamundaApplicationInt.COMPONENT, Object> repositoryPerComponent = new HashMap<>();
     Logger logger = LoggerFactory.getLogger(ExplorationCluster.class);
     /* ******************************************************************** */
     /*                                                                      */
@@ -50,12 +56,6 @@ public class ExplorationCluster {
     /*                                                                      */
     /* ******************************************************************** */
     private ZeebeConnect.ClusterInformation clusterInformation;
-    /* ******************************************************************** */
-    /*                                                                      */
-    /*  Repository per component                                           */
-    /*                                                                      */
-    /* ******************************************************************** */
-    private final Map<CamundaApplicationInt.COMPONENT, Object> repositoryPerComponent = new HashMap<>();
     private String namespace = null;
     private Rule.RuleStatus ruleStatus = null;
 

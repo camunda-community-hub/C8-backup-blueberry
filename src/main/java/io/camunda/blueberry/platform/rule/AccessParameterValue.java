@@ -3,6 +3,7 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.exception.CommunicationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -19,15 +20,13 @@ import java.util.Map;
 @Component
 
 public class AccessParameterValue {
-    Logger logger = LoggerFactory.getLogger(AccessParameterValue.class);
-
-    BlueberryConfig blueberryConfig;
-
     private final Map<String, String> dictionary = Map.of("operateRepository", "CAMUNDA_OPERATE_BACKUP_REPOSITORY_NAME",
             "tasklistRepository", "CAMUNDA_TASKLIST_BACKUP_REPOSITORY_NAME",
             "optimizeRepository", "CAMUNDA_OPTIMIZE_BACKUP_REPOSITORY_NAME",
             "zeebeRepository", "",
             "container.containerType", "ZEEBE_BROKER_DATA_BACKUP_STORE");
+    Logger logger = LoggerFactory.getLogger(AccessParameterValue.class);
+    BlueberryConfig blueberryConfig;
 
 
     public AccessParameterValue(BlueberryConfig blueberryConfig) {
@@ -42,7 +41,7 @@ public class AccessParameterValue {
      * @param actuatorUrl    url to access parameters
      * @return
      */
-    public ResultParameter accessParameterViaActuator(CamundaApplicationInt.COMPONENT component, List<String> listParameters, String actuatorUrl) {
+    public ResultParameter accessParameterViaActuator(CamundaApplicationInt.COMPONENT component, List<String> listParameters, String actuatorUrl) throws CommunicationException {
 
         // By the actuator
         ResultParameter resultParameter = new ResultParameter();
@@ -55,6 +54,7 @@ public class AccessParameterValue {
         } catch (Exception e) {
             logger.info("Can't access actuator component [{}] via URL[{}] : ", component, actuatorUrl, e);
             actuator = Collections.emptyMap();
+            throw CommunicationException.getInstanceFromComponent(component, e);
         }
         // access configuration
         Map<String, Object> configuration = accessConfiguration();
@@ -107,8 +107,9 @@ public class AccessParameterValue {
         return result;
     }
 
-    public class ResultParameter {
+    public static class ResultParameter {
         public boolean accessActuator;
+        public String info;
         public Map<String, Object> parameters = new HashMap<>();
     }
 }

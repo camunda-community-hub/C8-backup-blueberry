@@ -182,8 +182,8 @@ public class WebActuator {
                         return backupInfo;
                     }).toList();
         } catch (Exception e) {
-            logger.error("Can't call [{}] error {}", completeUrl, e);
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "Error url[" + completeUrl + "] : " + e.getMessage());
+            logger.error("Compoment {} Can't call [{}] error {}", component, completeUrl, e);
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No communication", "Component [" + component + "] Error url[" + completeUrl + "] : " + e.getMessage());
         }
     }
 

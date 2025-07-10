@@ -13,6 +13,7 @@ import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import RestCallService from "../services/RestCallService";
 import {Alert} from 'react-bootstrap';
+import ControllerPage from "../component/ControllerPage";
 
 
 class Configuration extends React.Component {
@@ -23,6 +24,7 @@ class Configuration extends React.Component {
 
         this.state = {
             display: {loading: false},
+            resultCall: {status: 200, error: "", message: "", component: ""},
             listChecks: []
         };
     }
@@ -45,6 +47,15 @@ class Configuration extends React.Component {
 
                     </div>
                 </div>
+                <div className="row" style={{width: "100%"}}>
+                    <div className="col-md-12">
+                        <ControllerPage
+                            error={this.state.resultCall.error}
+                            errorMessage={this.state.resultCall.errorMessage}
+                            loading={this.state.display.loading}/>
+                    </div>
+                </div>
+
                 <div className="row" style={{marginTop: "10px"}}>
                     <div className="col-md-2">
                         <Button className="btn btn-success btn-sm"

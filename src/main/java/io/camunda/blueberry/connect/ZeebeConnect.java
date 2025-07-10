@@ -196,7 +196,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
      */
     public Boolean getExporterStatus() throws OperationException {
         if (!activateConnection())
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.NO_ZEEBE_CONNECTION, "No connection");
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.NO_ZEEBE_CONNECTION, "No connection", "Connection is not established to Zeebe " + blueberryConfig.getZeebeActuatorUrl());
         try {
             ResponseEntity<JsonNode> listExporters = restTemplate.getForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/exporters", JsonNode.class);
 
@@ -310,7 +310,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             ResponseEntity<JsonNode> listResponse = restTemplate.getForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups", JsonNode.class);
             JsonNode jsonArray = listResponse.getBody();
             if (jsonArray == null)
-                throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST,
+                throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "Can't connect",
                         "No answer from [" + blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups]");
 
             List<BackupInfo> listBackupInfo = StreamSupport.stream(jsonArray.spliterator(), false)

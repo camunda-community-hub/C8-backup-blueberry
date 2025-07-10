@@ -3,6 +3,7 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.exception.CommunicationException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.List;
 public class RuleOptimizeRepository implements Rule {
 
 
+    public static final String OPTIMIZE_REPOSITORY = "optimizeRepository";
     private final BlueberryConfig blueberryConfig;
 
     private final KubernetesConnect kubernetesConnect;
@@ -79,10 +81,17 @@ public class RuleOptimizeRepository implements Rule {
         // ---------- First step, ask Operate for the name of the repository
         ruleInfo.setStatus(RuleStatus.INPROGRESS);
 
-        AccessParameterValue.ResultParameter resultParameter = accessParameters();
-        ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Operate /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
+        AccessParameterValue.ResultParameter resultParameter;
+        try {
+            resultParameter = accessParameters();
+        } catch (CommunicationException e) {
+            ruleInfo.addError("Access RepositoryName exploring Optimize /actuator/env failed: can't connect Optimize");
+            ruleInfo.setStatus(RuleStatus.FAILED);
+            return ruleInfo;
+        }
+        ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Optimize /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
 
-        String optimizeRepository = (String) resultParameter.parameters.get("optimizeRepository");
+        String optimizeRepository = (String) resultParameter.parameters.get(OPTIMIZE_REPOSITORY);
 
         if (optimizeRepository == null) {
             ruleInfo.setStatus(RuleStatus.FAILED);
@@ -117,7 +126,7 @@ public class RuleOptimizeRepository implements Rule {
         if (execute && ruleInfo.inProgress()) {
 
             OperationResult operationResult = elasticSearchConnect.createRepository(optimizeRepository,
-                    blueberryConfig.getContainerType(),
+                    blueberryConfig.getZeebeContainerType(),
                     blueberryConfig.getOptimizeContainerBasePath());
             if (operationResult.success) {
                 ruleInfo.addDetails("Repository is created in ElasticSearch");
@@ -141,8 +150,16 @@ public class RuleOptimizeRepository implements Rule {
         return ruleInfo;
     }
 
-    public AccessParameterValue.ResultParameter accessParameters() {
-        return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPTIMIZE, List.of("optimizeRepository"), blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env");
+    public AccessParameterValue.ResultParameter accessParameters() throws CommunicationException {
+        try {
+            return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPTIMIZE, List.of(OPTIMIZE_REPOSITORY), blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env");
+        } catch (CommunicationException e) {
+            AccessParameterValue.ResultParameter resultParameter = new AccessParameterValue.ResultParameter();
+            resultParameter.accessActuator = false;
+            resultParameter.parameters.put(OPTIMIZE_REPOSITORY, blueberryConfig.getOperateRepository());
+            return resultParameter;
+        }
+
     }
 
     private String getRepositoryByConfiguration(RuleInfo ruleInfo) {

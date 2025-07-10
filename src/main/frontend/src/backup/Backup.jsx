@@ -12,7 +12,7 @@ import ControllerPage from "../component/ControllerPage";
 
 import {Button, Checkbox, InlineNotification, Tag, TextInput} from "carbon-components-react";
 import {ArrowRepeat} from "react-bootstrap-icons";
-import {Card} from "react-bootstrap";
+import {Alert, Card} from "react-bootstrap";
 
 
 class Backup extends React.Component {
@@ -38,7 +38,7 @@ class Backup extends React.Component {
         // Set up the interval to call schedule() every 10 seconds
         this.intervalConnectionId = setInterval(() => {
             this.monitorBackup();
-        }, 10000);
+        }, 20000);
 
     }
     // Cleanup to clear the interval when the component unmounts
@@ -63,8 +63,8 @@ class Backup extends React.Component {
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-12">
                         <ControllerPage
-                            error={`${this.state.resultCall.component} - ${this.state.resultCall.error}`}
-                            errorMessage={this.state.resultCall.message}
+                            error={this.state.resultCall.error}
+                            errorMessage={this.state.resultCall.errorMessage}
                             loading={this.state.display.loading}/>
                     </div>
                 </div>
@@ -287,6 +287,7 @@ class Backup extends React.Component {
                     resultCall: {
                         status: httpPayload.getData().status,
                         error: httpPayload.getData().error,
+                        errorMessage: httpPayload.getData().errorMessage,
                         message: httpPayload.getData().message
                     },
                     listBackup: httpPayload.getData().listBackup

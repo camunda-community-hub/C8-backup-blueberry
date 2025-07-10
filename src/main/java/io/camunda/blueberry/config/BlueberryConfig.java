@@ -76,6 +76,8 @@ public class BlueberryConfig {
 
     @Value("${blueberry.container.azure.containerName:}")
     private String azureContainerName;
+    @Value("${blueberry.container.azure.basePath:}")
+    private String azureBasePath;
 
     // S3 specific configuration
     @Value("${blueberry.container.s3.bucket:}")
@@ -123,7 +125,11 @@ public class BlueberryConfig {
         return azureContainerName;
     }
 
-    public String getContainerType() {
+    public String getAzureBasePath() {
+        return azureBasePath;
+    }
+
+    public String getZeebeContainerType() {
         return containerType;
     }
 

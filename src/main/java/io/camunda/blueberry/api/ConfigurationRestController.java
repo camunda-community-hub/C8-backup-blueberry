@@ -62,6 +62,7 @@ public class ConfigurationRestController {
                     })
                     .toList();
         } catch (Exception e) {
+            logger.error("configurationCheck error: ", e);
             throw new RuntimeException(e);
         }
     }

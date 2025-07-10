@@ -3,16 +3,18 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.exception.CommunicationException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 /**
- * Operate define a repository, and the repository exist in ElasticSearch
+ * Operate define a repository, and the repository exists in ElasticSearch
  */
 @Component
 public class RuleOperateRepository implements Rule {
 
+    public static final String OPERATE_REPOSITORY = "operateRepository";
     private final BlueberryConfig blueberryConfig;
 
     private final KubernetesConnect kubernetesConnect;
@@ -79,23 +81,31 @@ public class RuleOperateRepository implements Rule {
         // ---------- First step, ask Operate for the name of the repository
         // the rule is in progress
         ruleInfo.setStatus(RuleStatus.INPROGRESS);
-
-        AccessParameterValue.ResultParameter resultParameter = accessParameters();
+        AccessParameterValue.ResultParameter resultParameter;
+        try {
+            resultParameter = accessParameters();
+        } catch (CommunicationException e) {
+            ruleInfo.addError("Access RepositoryName exploring Operate /actuator/env failed: can't connect Operate");
+            ruleInfo.setStatus(RuleStatus.FAILED);
+            return ruleInfo;
+        }
         ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Operate /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
 
-        String operateRepository = (String) resultParameter.parameters.get("operateRepository");
+        Object operateRepository = resultParameter.parameters.get(OPERATE_REPOSITORY);
 
         if (operateRepository == null) {
             ruleInfo.setStatus(RuleStatus.FAILED);
         }
 
-        ruleInfo.addVerificationsAssertBoolean("Access pod repository, retrieve [" + operateRepository + "]", operateRepository != null,
+        ruleInfo.addVerificationsAssertBoolean("Access pod repository, retrieve [" + operateRepository + "]",
+                operateRepository != null,
                 "From Configuration");
 
         //------------ Second step, verify if the repository exists in elasticSearch
         if (ruleInfo.inProgress()) {
+
             // now check if the repository exists in Elastic search
-            OperationResult operationResult = elasticSearchConnect.existRepository(operateRepository);
+            OperationResult operationResult = elasticSearchConnect.existRepository(operateRepository.toString());
             accessElasticsearchRepository = operationResult.resultBoolean;
             ruleInfo.addVerificationsButWillBeFixed("Check Elasticsearch repository [" + operateRepository + "] :"
                             + operationResult.details,
@@ -108,7 +118,7 @@ public class RuleOperateRepository implements Rule {
             } else {
                 // if we don't execute the rule, we stop here on a failure
                 if (!execute) {
-                    ruleInfo.addDetails("Repository does not exist in Elastic search, and must be created");
+                    ruleInfo.addError("Repository does not exist in Elastic search, and must be created");
                     ruleInfo.setStatus(RuleStatus.FAILED);
                 }
             }
@@ -117,8 +127,8 @@ public class RuleOperateRepository implements Rule {
 
         // Third step, create the repository if asked
         if (execute && ruleInfo.inProgress()) {
-            OperationResult operationResult = elasticSearchConnect.createRepository(operateRepository,
-                    blueberryConfig.getContainerType(),
+            OperationResult operationResult = elasticSearchConnect.createRepository(operateRepository.toString(),
+                    blueberryConfig.getZeebeContainerType(),
                     blueberryConfig.getOperateContainerBasePath());
             if (operationResult.success) {
                 ruleInfo.addDetails("Repository is created in ElasticSearch");
@@ -127,7 +137,7 @@ public class RuleOperateRepository implements Rule {
                 ruleInfo.setStatus(RuleStatus.FAILED);
             }
             ruleInfo.addVerifications("Check Elasticsearch repository [" + operateRepository
-                            + "] ContainerType[" + blueberryConfig.getContainerType()
+                            + "] ContainerType[" + blueberryConfig.getZeebeContainerType()
                             + "] ContainerName[" + blueberryConfig.getAzureContainerName()
                             + "] basePath[" + blueberryConfig.getOperateContainerBasePath() + "]",
                     operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
@@ -141,8 +151,15 @@ public class RuleOperateRepository implements Rule {
     }
 
 
-    public AccessParameterValue.ResultParameter accessParameters() {
-        return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPERATE, List.of("operateRepository"), blueberryConfig.getOperateActuatorUrl() + "/actuator/env");
+    public AccessParameterValue.ResultParameter accessParameters() throws CommunicationException {
+        try {
+            return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPERATE, List.of(OPERATE_REPOSITORY), blueberryConfig.getOperateActuatorUrl() + "/actuator/env");
+        } catch (CommunicationException e) {
+            AccessParameterValue.ResultParameter resultParameter = new AccessParameterValue.ResultParameter();
+            resultParameter.accessActuator = false;
+            resultParameter.parameters.put(OPERATE_REPOSITORY, blueberryConfig.getOperateRepository());
+            return resultParameter;
+        }
     }
 
 
@@ -153,8 +170,6 @@ public class RuleOperateRepository implements Rule {
 
     private String getRepositoryByOperateEnvironment(RuleInfo ruleInfo) {
         ruleInfo.addDetails("Access RepositoryName exploring Operate environment");
-
-
         return operateConnect.getBackupRepositoryName();
     }
 

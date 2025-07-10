@@ -36,11 +36,11 @@ public interface Rule {
      */
     class RuleInfo {
         private final Rule rule;
-        private boolean valid;
         private final StringBuilder details = new StringBuilder();
         private final StringBuilder errors = new StringBuilder();
-        private RuleStatus status = RuleStatus.INPROGRESS;
         private final List<Tuple> listVerifications = new ArrayList();
+        private boolean valid;
+        private RuleStatus status = RuleStatus.INPROGRESS;
 
         public RuleInfo(Rule rule) {
             this.rule = rule;

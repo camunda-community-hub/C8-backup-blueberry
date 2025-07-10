@@ -2,7 +2,7 @@ blueberry:
   optimizeActuatorUrl: http://localhost:9603
   operateActuatorUrl: http://localhost:9601
   tasklistActuatorUrl: http://localhost:9602
-  zeebeActuatorUrl: http://localhost:9600
+  zeebeActuatorUrl: http://localhost:9604
   elasticsearchurl: http://localhost:9200
 
   # This information is temporary. They must come from the pod itself
