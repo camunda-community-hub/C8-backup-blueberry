@@ -24,6 +24,8 @@ public interface BackupComponentInt {
 
     List<BackupInfo> getListBackups() throws OperationException;
 
+    String getUrlListBackup();
+
     class BackupOperation {
         public List<String> listSnapshots = new ArrayList<>();
         public int status;

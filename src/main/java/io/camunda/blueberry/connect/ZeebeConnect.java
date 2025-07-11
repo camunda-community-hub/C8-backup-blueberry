@@ -196,7 +196,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
      */
     public Boolean getExporterStatus() throws OperationException {
         if (!activateConnection())
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.NO_ZEEBE_CONNECTION, "No connection", "Connection is not established to Zeebe " + blueberryConfig.getZeebeActuatorUrl());
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.NO_ZEEBE_CONNECTION, "No connection to Zeebe", "Connection is not established to Zeebe " + blueberryConfig.getZeebeActuatorUrl());
         try {
             ResponseEntity<JsonNode> listExporters = restTemplate.getForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/exporters", JsonNode.class);
 
@@ -307,7 +307,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         ResponseEntity<BackupInfo> backupStatusResponse = null;
         try {
             logger.debug("Execute [{}]", blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups");
-            ResponseEntity<JsonNode> listResponse = restTemplate.getForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups", JsonNode.class);
+            ResponseEntity<JsonNode> listResponse = restTemplate.getForEntity(getUrlListBackup(), JsonNode.class);
             JsonNode jsonArray = listResponse.getBody();
             if (jsonArray == null)
                 throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "Can't connect",
@@ -335,12 +335,16 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
 
             return listBackupInfo;
         } catch (Exception e) {
-            throw OperationException.getInstanceFromException(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, e);
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No Connection to Zeebe",
+                    "Error url[" + blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups" + "] : " + e.getMessage());
+
         }
     }
 
-
-
+    @Override
+    public String getUrlListBackup() {
+        return blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups";
+    }
 
     /* ******************************************************************** */
     /*                                                                      */

@@ -39,16 +39,16 @@ public class BlueberryConfig {
     /**
      * Repository in Elastic search can be created to backup indexes
      */
-    @Value("${blueberry.elasticsearch.operateContainerBasePath:/operate}")
+    @Value("${blueberry.elasticsearch.operateContainerBasePath:operate}")
     private String operateContainerBasePath;
 
-    @Value("${blueberry.elasticsearch.tasklistContainerBasePath:/tasklist}")
+    @Value("${blueberry.elasticsearch.tasklistContainerBasePath:tasklist}")
     private String tasklistContainerBasePath;
 
-    @Value("${blueberry.elasticsearch.optimizeContainerBasePath:/optimize}")
+    @Value("${blueberry.elasticsearch.optimizeContainerBasePath:optimize}")
     private String optimizeContainerBasePath;
 
-    @Value("${blueberry.elasticsearch.zeebeRecordContainerBasePath:/zeeberecord}")
+    @Value("${blueberry.elasticsearch.zeebeRecordContainerBasePath:zeeberecord}")
     private String zeebeRecordContainerBasePath;
 
     @Value("${blueberry.elasticsearch.zeebeRecordRepository:camunda_zeebe_records_backup}")

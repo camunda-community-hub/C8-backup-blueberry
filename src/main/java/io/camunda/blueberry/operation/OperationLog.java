@@ -58,7 +58,11 @@ public class OperationLog {
     }
 
     public void info(CamundaApplicationInt.COMPONENT component, String message) {
-        logger.info("Component:{} : {}", component, message);
+        if (component==null) {
+            logger.info( message);
+        } else {
+            logger.info("Component:{} : {}", component, message);
+        }
         Message msg = new Message();
         msg.type = Type.INFO;
         msg.message = message;

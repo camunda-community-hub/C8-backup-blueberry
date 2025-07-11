@@ -80,8 +80,13 @@ public class OperateConnect implements CamundaApplicationInt, BackupComponentInt
      */
     @Override
     public List<BackupInfo> getListBackups() throws OperationException {
-        return webActuator.getListBackups(COMPONENT.OPERATE, blueberryConfig.getOperateActuatorUrl());
+        return webActuator.getListBackups(COMPONENT.OPERATE, getUrlListBackup());
     }
+    @Override
+    public String getUrlListBackup() {
+        return  blueberryConfig.getOperateActuatorUrl()+"/actuator/backups";
+    }
+
 
     public String getBackupRepositoryName() {
         try {

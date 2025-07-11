@@ -69,7 +69,12 @@ public class TaskListConnect implements CamundaApplicationInt {
 
     @Override
     public List<BackupInfo> getListBackups() throws OperationException {
-        return webActuator.getListBackups(COMPONENT.TASKLIST, blueberryConfig.getTasklistActuatorUrl());
+        return webActuator.getListBackups(COMPONENT.TASKLIST, getUrlListBackup());
+    }
+
+    @Override
+    public String getUrlListBackup() {
+        return  blueberryConfig.getTasklistActuatorUrl()+"/actuator/backups";
     }
 }
 

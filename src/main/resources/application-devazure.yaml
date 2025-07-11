@@ -25,10 +25,10 @@ blueberry:
 
   # When repository need to be created, then a base path is used. All based path used
   elasticsearch:
-    operateContainerBasePath: /operate
-    tasklistContainerBasePath: /tasklist
-    optimizeContainerBasePath: /optimize
-    zeebeRecordContainerBasePath: /zeeberecord
+    operateContainerBasePath: operate
+    tasklistContainerBasePath: tasklist
+    optimizeContainerBasePath: optimize
+    zeebeRecordContainerBasePath: zeeberecord
     # ZeebeRecord need a backup. Here is the name of the backup to be created
     zeebeRecordRepository: camunda_zeebe_records_backup
     zeebeRecordBasePath: zeeberecordbackup

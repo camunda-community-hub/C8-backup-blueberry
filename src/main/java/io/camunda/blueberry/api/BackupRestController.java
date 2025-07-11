@@ -88,12 +88,12 @@ public class BackupRestController {
         try {
             logger.debug("Rest [/api/backup/list]");
 
-            List<BackupInfo> listBackup = backupManager.getListBackups();
+            BackupManager.ListBackupResult listBackupResult = backupManager.getListBackups();
 
-            logger.info("Rest [/api/backup/list] found {} backups", listBackup.size());
+            logger.info("Rest [/api/backup/list] found {} backups", listBackupResult.listBackups.size());
             BackupJob backupJob = backupManager.getBackupJob();
 
-            List<Map<String, Object>> listBackupMap = listBackup.stream().map(obj -> {
+            List<Map<String, Object>> listBackupMap = listBackupResult.listBackups.stream().map(obj -> {
                         Map<String, Object> mapRecord = new HashMap<>();
                         mapRecord.put("backupId", obj.backupId);
                         mapRecord.put("backupName", obj.backupName);
@@ -111,7 +111,7 @@ public class BackupRestController {
 
             if (backupJob != null) {
                 // Attention, the backup is maybe complete, and already in the previous list
-                Optional<BackupInfo> first = listBackup.stream().filter(obj -> obj.backupId == backupJob.getBackupId()).findFirst();
+                Optional<BackupInfo> first = listBackupResult.listBackups.stream().filter(obj -> obj.backupId == backupJob.getBackupId()).findFirst();
                 if (!first.isPresent()) {
                     listBackupMap.add(0, Map.of("backupId", backupJob.getBackupId(),
                             "backupName", "",
@@ -119,7 +119,24 @@ public class BackupRestController {
                             "backupStatus", backupJob.getJobStatus().toString()));
                 }
             }
-            result.put("listBackup", listBackupMap);
+            result.put("listBackups", listBackupMap);
+
+            result.put("listUrlsBackup", listBackupResult.listUrls.entrySet().stream()
+                    .map(entry -> {
+                        Map<String, Object> map = new HashMap<>();
+                        map.put("name", entry.getKey());
+                        map.put("url", entry.getValue());
+                        return map;
+                    })
+                    .collect(Collectors.toList()));
+
+
+            result.put("errorMessage", listBackupResult.listErrors.stream()
+                    .map(OperationException::getMessage)
+                    .collect(Collectors.joining(";")));
+            result.put("error", listBackupResult.listErrors.stream()
+                    .map(OperationException::getError)
+                    .collect(Collectors.joining(";")));
 
             return result;
         } catch (OperationException oe) {

@@ -12,7 +12,7 @@ import ControllerPage from "../component/ControllerPage";
 
 import {Button, Checkbox, InlineNotification, Tag, TextInput} from "carbon-components-react";
 import {ArrowRepeat} from "react-bootstrap-icons";
-import {Alert, Card} from "react-bootstrap";
+import {Card} from "react-bootstrap";
 
 
 class Backup extends React.Component {
@@ -25,7 +25,8 @@ class Backup extends React.Component {
             display: {loading: false},
             parameter: {explicit: false, backupId: ''},
             resultCall: {status: 200, error: "", message: "", component: ""},
-            listBackup: [],
+            listBackups: [],
+            listUrlsBackup: [],
             currentBackup: {statusBackup: ""}
 
         };
@@ -41,11 +42,13 @@ class Backup extends React.Component {
         }, 20000);
 
     }
+
     // Cleanup to clear the interval when the component unmounts
     componentWillUnmount() {
         console.log("Backup: componentWillUnmount");
         clearInterval(this.intervalId);
     }
+
     /*           {JSON.stringify(this.state.runners, null, 2) } */
     render() {
         return (
@@ -73,7 +76,8 @@ class Backup extends React.Component {
                 <div className="row" style={{marginTop: "10px"}}>
                     <div className="col-md-6">
                         <Card>
-                            <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}} >Backup</Card.Header>
+                            <Card.Header
+                                style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}}>Backup</Card.Header>
                             <Card.Body>
 
                                 <Checkbox
@@ -115,7 +119,9 @@ class Backup extends React.Component {
                     </div>
                     <div className="col-md-6">
                         <Card>
-                            <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}} className="d-flex justify-content-between align-items-center h-150">Current backup
+                            <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}}
+                                         className="d-flex justify-content-between align-items-center h-150">Current
+                                backup
                                 <Button className="btn btn-light btn-sm"
                                         onClick={() => {
                                             this.monitorBackup();
@@ -157,8 +163,11 @@ class Backup extends React.Component {
 
                                 <div>
                                     {this.state.currentBackup?.messages?.map((entry, index) => (
-                                        <div key={index} className={`alert ${entry.type === 'ERROR' ? 'alert-danger' : 'alert-info'}`} role="alert">
-                                            <strong>{entry.type}</strong> - ({entry.component}) – {new Date(entry.date).toLocaleString()}<br />
+                                        <div key={index}
+                                             className={`alert ${entry.type === 'ERROR' ? 'alert-danger' : 'alert-info'}`}
+                                             role="alert">
+                                            <strong>{entry.type}</strong> - ({entry.component})
+                                            – {new Date(entry.date).toLocaleString()}<br/>
                                             {entry.message}
                                         </div>
                                     ))}
@@ -172,7 +181,7 @@ class Backup extends React.Component {
                 <div className="row" style={{marginTop: "10px"}}>
                     <Button className="btn btn-success btn-sm"
                             onClick={() => {
-                                this.refreshListBackup();
+                                this.refreshListBackups();
                                 this.monitorBackup();
                             }}
                             disabled={this.state.display.loading}>
@@ -191,7 +200,7 @@ class Backup extends React.Component {
                     </tr>
                     </thead>
                     <tbody>
-                    {this.state.listBackup ? this.state.listBackup.map((content, _index) =>
+                    {this.state.listBackups ? this.state.listBackups.map((content, _index) =>
                         <tr>
                             <td>{content.backupId}</td>
                             <td>
@@ -209,7 +218,36 @@ class Backup extends React.Component {
                     </tbody>
                 </table>
 
+                <div className="row" style={{marginTop: "10px"}}>
+                    <div className="col-md-12">
+                        <Card>
+                            <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}}>
+                                List URLs
+                            </Card.Header>
+                            <Card.Body>
+                                <table className="table is-hoverable is-fullwidth">
+                                    <thead>
+                                    <tr>
+                                        <th>Component</th>
+                                        <th>Url</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    {this.state.listUrlsBackup ? this.state.listUrlsBackup.map((content, _index) =>
+                                        <tr>
+                                            <td>{content.name}</td>
+                                            <td>{content.url}</td>
+                                        </tr>
+                                    ) : <div/>
+                                    }
+                                    </tbody>
+                                </table>
+                            </Card.Body>
+                        </Card>
+                    </div>
+                </div>
             </div>
+
         )
     }
 
@@ -234,10 +272,11 @@ class Backup extends React.Component {
 
         }
     }
-        /* Set the display property
-     * @param propertyName name of the property
-     * @param propertyValue the value
-     */
+
+    /* Set the display property
+ * @param propertyName name of the property
+ * @param propertyValue the value
+ */
     setDisplayProperty(propertyName, propertyValue) {
         let displayObject = this.state.display;
         displayObject[propertyName] = propertyValue;
@@ -261,22 +300,22 @@ class Backup extends React.Component {
                 statusOperation: ""
             });
         } else {
-            this.setState({ currentBackup : httpPayload.getData()})
+            this.setState({currentBackup: httpPayload.getData()})
         }
     }
 
 
-    refreshListBackup() {
+    refreshListBackups() {
         let uri = '/blueberry/api/backup/list?';
         console.log("backup.refresh http[" + uri + "]");
 
         this.setDisplayProperty("loading", true);
         this.setState({status: ""});
         var restCallService = RestCallService.getInstance();
-        restCallService.getJson(uri, this, this.refreshListBackupCallback);
+        restCallService.getJson(uri, this, this.refreshListBackupsCallback);
     }
 
-    refreshListBackupCallback(httpPayload) {
+    refreshListBackupsCallback(httpPayload) {
         this.setDisplayProperty("loading", false);
         if (httpPayload.isError()) {
             console.log("Backup.monitorBackupCallback: error " + httpPayload.getError());
@@ -290,7 +329,8 @@ class Backup extends React.Component {
                         errorMessage: httpPayload.getData().errorMessage,
                         message: httpPayload.getData().message
                     },
-                    listBackup: httpPayload.getData().listBackup
+                    listBackups: httpPayload.getData().listBackups,
+                    listUrlsBackup: httpPayload.getData().listUrlsBackup
                 })
         }
     }
@@ -325,7 +365,7 @@ class Backup extends React.Component {
                     statusOperation: httpPayload.getData().statusOperation
                 });
             this.monitorBackup();
-            this.refreshListBackup();
+            this.refreshListBackups();
         }
     }
 

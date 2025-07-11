@@ -36,7 +36,7 @@ public class BackupInfo {
                 return Status.UNKNOWN;
             }
             case "IN_PROGRESS" -> {
-                return Status.INPROGRESS;
+                return Status.IN_PROGRESS;
             }
             case "SBE_UNKNOWN" -> {
                 return Status.UNKNOWN;
@@ -54,7 +54,7 @@ public class BackupInfo {
         return backupId;
     }
 
-    public enum Status {COMPLETED, FAILED, INPROGRESS, UNKNOWN, PARTIALBACKUP}
+    public enum Status {COMPLETED, FAILED, IN_PROGRESS, UNKNOWN, PARTIALBACKUP}
 
     public static class Details {
         private String snapshotName;

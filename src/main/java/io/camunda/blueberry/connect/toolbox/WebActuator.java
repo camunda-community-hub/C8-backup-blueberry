@@ -153,10 +153,9 @@ public class WebActuator {
      * @param url       complete url to start the backup command in the component
      */
     public List<BackupInfo> getListBackups(CamundaApplicationInt.COMPONENT component, String url) throws OperationException {
-        String completeUrl = url + "/actuator/backups";
         try {
 
-            ResponseEntity<ActuatorBackupStatusResponse[]> backupListResponse = restTemplate.getForEntity(completeUrl, ActuatorBackupStatusResponse[].class);
+            ResponseEntity<ActuatorBackupStatusResponse[]> backupListResponse = restTemplate.getForEntity(url, ActuatorBackupStatusResponse[].class);
             logger.info("backup {} status response for url {}: {}, {}", component.name(), url, backupListResponse.getStatusCodeValue(), backupListResponse.getBody());
             if (!backupListResponse.getStatusCode().is2xxSuccessful())
                 throw new OperationException(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, backupListResponse.getStatusCode().value(), "Can't access the Actuator", "Can't access the Actuator");
@@ -168,7 +167,11 @@ public class WebActuator {
                         BackupInfo backupInfo = new BackupInfo();
                         backupInfo.backupId = t.getBackupId();
                         backupInfo.components.add(component);
-                        backupInfo.status = BackupInfo.Status.valueOf(t.getState());
+                        try {
+                            backupInfo.status = BackupInfo.Status.valueOf(t.getState());
+                        } catch (IllegalArgumentException e) {
+                            backupInfo.status=BackupInfo.Status.UNKNOWN;
+                        }
                         // search the date in the first partition
                         if (t.getDetails().size() > 1) {
                             // value is 2025-05-29T00:16:55.622+0000
@@ -182,8 +185,9 @@ public class WebActuator {
                         return backupInfo;
                     }).toList();
         } catch (Exception e) {
-            logger.error("Compoment {} Can't call [{}] error {}", component, completeUrl, e);
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No communication", "Component [" + component + "] Error url[" + completeUrl + "] : " + e.getMessage());
+            logger.error("Compoment {} Can't call [{}] error {}", component, url, e);
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No communication to "+component,
+                    component + ": Error url[" + url + "] : " + e.getMessage());
         }
     }
 

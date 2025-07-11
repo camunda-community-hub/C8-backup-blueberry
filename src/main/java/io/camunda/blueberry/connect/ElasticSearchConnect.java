@@ -280,7 +280,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
     @Override
     public List<BackupInfo> getListBackups() throws OperationException {
 
-        String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/_all";
+        String urlComplete = getUrlListBackup();
         try {
             // http://localhost:9200/_snapshot/camunda_zeebe_records_backup/_all?pretty
             ResponseEntity<JsonNode> response = restTemplate.getForEntity(urlComplete, JsonNode.class);
@@ -311,5 +311,10 @@ public class ElasticSearchConnect implements BackupComponentInt {
             logger.error("Can't call [{}] error {}", urlComplete, e);
             throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No Connection to ElasticSearch", "Error url[" + urlComplete + "] : " + e.getMessage());
         }
+    }
+    @Override
+    public String getUrlListBackup() {
+        return blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/_all";
+
     }
 }

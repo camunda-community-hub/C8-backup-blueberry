@@ -70,6 +70,11 @@ public class OptimizeConnect implements CamundaApplicationInt {
 
     @Override
     public List<BackupInfo> getListBackups() throws OperationException {
-        return webActuator.getListBackups(COMPONENT.OPTIMIZE, blueberryConfig.getOptimizeActuatorUrl());
+        return webActuator.getListBackups(COMPONENT.OPTIMIZE, getUrlListBackup());
+    }
+
+    @Override
+    public String getUrlListBackup() {
+        return  blueberryConfig.getOptimizeActuatorUrl()+"/actuator/backups";
     }
 }

@@ -181,7 +181,7 @@ class Parameters extends React.Component {
                                 - name: MANAGEMENT_ENDPOINT_ENV_SHOW_VALUES<br/>
                                 &nbsp;&nbsp;value:  ALWAYS<br/>
                                 - name: management.endpoints.web.exposure.include<br/>
-                                &nbsp;&nbsp;value: health,env<br/>
+                                &nbsp;&nbsp;value: health, prometheus, loggers, usage-metrics, backups, env<br/>
                                 - name: management.endpoint.health.probes.enabled<br/>
                                 &nbsp;&nbsp;value: true<br/>
                             </code>
@@ -206,6 +206,22 @@ class Parameters extends React.Component {
                             value={this.state.parameters.tasklistContainerBasePath}
                             readOnly
                         />
+                    </div>
+                    <div className="col-md-6">
+                        If Tasklist open the actuator/env API, then information come directly from Operate. Else, from
+                        the configuration.<br/>
+                        To open Tasklist Actuator, add
+
+                        <pre className="bg-light p-2 rounded text-dark">
+                            <code>
+                                - name: MANAGEMENT_ENDPOINT_ENV_SHOW_VALUES<br/>
+                                &nbsp;&nbsp;value:  ALWAYS<br/>
+                                - name: management.endpoints.web.exposure.include<br/>
+                                &nbsp;&nbsp;value: health, prometheus, loggers, usage-metrics, backups, env<br/>
+                                - name: management.endpoint.health.probes.enabled<br/>
+                                &nbsp;&nbsp;value: true<br/>
+                            </code>
+                        </pre>
                     </div>
                 </div>
                 <div className="row" style={{marginTop: "10px"}}>
@@ -243,7 +259,22 @@ class Parameters extends React.Component {
                             readOnly
                         />
                     </div>
+                    <div className="col-md-6">
+                        If Zeebe open the actuator/env API, then information come directly from Operate. Else, from
+                        the configuration.<br/>
+                        To open Zeebe Actuator, add
 
+                        <pre className="bg-light p-2 rounded text-dark">
+                            <code>
+                                - name: MANAGEMENT_ENDPOINT_ENV_SHOW_VALUES<br/>
+                                &nbsp;&nbsp;value:  ALWAYS<br/>
+                                - name: management.endpoints.web.exposure.include<br/>
+                                &nbsp;&nbsp;value: health, prometheus, loggers, usage-metrics, backups, env<br/>
+                                - name: management.endpoint.health.probes.enabled<br/>
+                                &nbsp;&nbsp;value: true<br/>
+                            </code>
+                        </pre>
+                    </div>
                 </div>
 
                 <div className="row" style={{marginTop: "10px"}}>
