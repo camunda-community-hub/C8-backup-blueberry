@@ -116,7 +116,7 @@
         <dependency>
             <groupId>io.fabric8</groupId>
             <artifactId>kubernetes-client</artifactId>
-            <version>7.1.0</version>  <!-- Use the latest version -->
+            <version>7.4.0</version>  <!-- Use the latest version -->
         </dependency>
 
 
