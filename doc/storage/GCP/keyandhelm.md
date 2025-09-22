@@ -249,10 +249,15 @@ kubectl port-forward services/camunda-operate 9600:9600 -n camunda
 export BACKUP_ID=$(date +%s) # unix timestamp as unique always increasing ID
 
 export ELASTIC_SNAPSHOT_REPOSITORY="zeeberecordrepository" # the name of your zeebe snapshot repository
+
 export ELASTIC_ENDPOINT="http://localhost:9200"
+
 export OPERATE_MANAGEMENT_API="http://localhost:9600"
+
 export OPTIMIZE_MANAGEMENT_API="http://localhost:9620"
+
 export TASKLIST_MANAGEMENT_API="http://localhost:9640"
+
 export GATEWAY_MANAGEMENT_API="http://localhost:9660"
 
 
