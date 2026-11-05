@@ -7,9 +7,10 @@
     <!-- 1.1.0 Add connection dashboard and review dashboard when no connection is possible to component. GCS is integrated -->
     <!-- 1.2.0 Add Current Backup message + refresh every 10 seconds + Explore backups All components (Operate, TaskList,Optimize, ZeebeRecord, Zeebe) to create an exhaustive list -->
     <!-- 1.3.0 Use the operate/actuator/env if this is open -->
+    <!-- 1.4.0 v2: dashboard, completeness, Camunda 8.7–8.10 selector, PwC 8.7 restore (K8s + ES) -->
     <groupId>io.camunda.community</groupId>
     <artifactId>blueberry</artifactId>
-    <version>1.3.0</version>
+    <version>1.4.0</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -116,7 +117,7 @@
         <dependency>
             <groupId>io.fabric8</groupId>
             <artifactId>kubernetes-client</artifactId>
-            <version>7.1.0</version>  <!-- Use the latest version -->
+            <version>7.9.0</version>
         </dependency>
 
 
@@ -146,6 +147,24 @@
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
             <version>${version.junit.jupiter}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <version>1.12.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-engine</artifactId>
+            <version>1.12.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-commons</artifactId>
+            <version>1.12.1</version>
             <scope>test</scope>
         </dependency>
 
@@ -194,6 +213,10 @@
                         </goals>
                         <configuration>
                             <arguments>run build</arguments>
+                            <environmentVariables>
+                                <CI>false</CI>
+                                <DISABLE_ESLINT_PLUGIN>true</DISABLE_ESLINT_PLUGIN>
+                            </environmentVariables>
                         </configuration>
                     </execution>
                 </executions>
@@ -224,13 +247,6 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.3</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.junit.platform</groupId>
-                        <artifactId>junit-platform-surefire-provider</artifactId>
-                        <version>1.3.2</version>
-                    </dependency>
-                </dependencies>
             </plugin>
 
 

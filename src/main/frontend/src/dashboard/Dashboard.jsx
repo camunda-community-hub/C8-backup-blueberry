@@ -28,13 +28,19 @@ class Dashboard extends React.Component {
                     clusterSize: "",
                     partitionsCount: "",
                     replicationfactor: "",
-                    statusCluster: "ACTIVE"
+                    statusCluster: "ACTIVE",
+                    statusLabel: ""
                 },
                 backup: {
                     history: [],
+                    latest: {present: false},
                     statusBackup: "",
-                    step: "2/7 backup Operate",
-                    backups: ""
+                    step: "",
+                    inProgressBackupId: null,
+                    backupsCount: 0,
+                    backupsComplete: 0,
+                    backupsPartial: 0,
+                    backupsFailed: 0
                 },
                 configuration: {
                     statusConfiguration: "CORRECT",
@@ -91,8 +97,17 @@ class Dashboard extends React.Component {
                     <div className="col-md-10">
                         <h1 className="title">Dashboard</h1>
                         <InlineNotification kind="info" hideCloseButton="true" lowContrast="false">
-                            Give the last backup time and status, if a next backup is scheduled.
+                            Backup timeline uses the merged list from all components. Refresh loads live data;
+                            the page also auto-refreshes every 2 minutes (connections every 60 seconds).
                         </InlineNotification>
+                        {this.state.dashboard.backup.statusBackup === "INPROGRESS" &&
+                            <InlineNotification kind="warning" hideCloseButton="true" lowContrast="false"
+                                                style={{marginTop: "8px"}}>
+                                Backup in progress
+                                {this.state.dashboard.backup.inProgressBackupId != null &&
+                                    <> (ID {this.state.dashboard.backup.inProgressBackupId})</>}
+                                {this.state.dashboard.backup.step && <> — {this.state.dashboard.backup.step}</>}
+                            </InlineNotification>}
                     </div>
 
                     <div className="col-md-2">
@@ -113,18 +128,31 @@ class Dashboard extends React.Component {
                         <Card>
                             <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)"}}>Backup timeline</Card.Header>
                             <Card.Body>
-                                <Chart type="HorizontalBar" dataList={this.state.dashboard.backup.history}
-                                       oneColor={true}
+                                {(!this.state.dashboard.backup.history ||
+                                    this.state.dashboard.backup.history.length === 0) &&
+                                    <p className="text-muted mb-2">
+                                        No backups in the merged list yet. Start a backup from the Backup tab, or
+                                        check component connectivity below if you expect existing backups.
+                                    </p>}
+                                <Chart type="HorizontalBar"
+                                       dataList={this.enrichHistoryForChart(this.state.dashboard.backup.history)}
+                                       oneColor={false}
                                        options={{
                                            title: this.state.title,
-                                           showXLabel: false,
+                                           showXLabel: true,
                                            showYLabel: true,
                                            width: 200,
-                                           height: 100,
+                                           height: Math.max(120, (this.state.dashboard.backup.history?.length || 1) * 28),
                                            showGrid: false
                                        }}
                                        title="Backup timeline"/>
-
+                                <div style={{marginTop: "8px", fontSize: "0.85rem"}}>
+                                    <Tag type="green">Complete</Tag>{" "}
+                                    <Tag type="magenta">Partial</Tag>{" "}
+                                    <Tag type="blue">In progress</Tag>{" "}
+                                    <Tag type="red">Failed</Tag>{" "}
+                                    <Tag type="gray">Unknown</Tag>
+                                </div>
                             </Card.Body>
                         </Card>
                     </div>
@@ -143,6 +171,18 @@ class Dashboard extends React.Component {
                                             {this.state.dashboard.backup.step}
                                         </td>
                                     </tr>
+                                    {this.state.dashboard.backup.latest?.present &&
+                                        <tr>
+                                            <td>Latest backup</td>
+                                            <td style={{textAlign: "right"}}>
+                                                ID {this.state.dashboard.backup.latest.backupId}
+                                                <br/>
+                                                {this.renderConnectionTag(this.state.dashboard.backup.latest.status)}
+                                                {this.state.dashboard.backup.latest.backupTime &&
+                                                    <><br/><span
+                                                        className="text-muted">{this.state.dashboard.backup.latest.backupTime}</span></>}
+                                            </td>
+                                        </tr>}
                                     <tr>
                                         <td>Total number of backups</td>
                                         <td style={{textAlign: "right"}}>{this.state.dashboard.backup.backupsCount}</td>
@@ -150,6 +190,10 @@ class Dashboard extends React.Component {
                                     <tr>
                                         <td>backup complete</td>
                                         <td style={{textAlign: "right"}}>{this.state.dashboard.backup.backupsComplete}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>backup partial</td>
+                                        <td style={{textAlign: "right"}}>{this.state.dashboard.backup.backupsPartial}</td>
                                     </tr>
                                     <tr>
                                         <td>backup failed</td>
@@ -205,10 +249,11 @@ class Dashboard extends React.Component {
                             <Card.Body>
                                 <table style={{borderCollapse: "separate", borderSpacing: "10px"}}>
                                     <tr>
-                                        <td style={{verticalAlign: "middle"}}>Status</td>
+                                        <td style={{verticalAlign: "middle"}}>Zeebe exporters</td>
                                         <td style={{textAlign: "center"}}>
                                             {this.renderConnectionTag(this.state.dashboard.cluster.statusCluster)}
-
+                                            <br/>
+                                            <span className="text-muted">{this.state.dashboard.cluster.statusLabel}</span>
                                         </td>
                                     </tr>
                                     <tr>
@@ -359,6 +404,12 @@ class Dashboard extends React.Component {
             case "INPROGRESS":
                 return <Tag type="blue">In progress</Tag>
 
+            case "PARTIALBACKUP":
+                return <Tag type="magenta">Partial</Tag>
+
+            case "COMPLETED":
+                return <Tag type="green">Complete</Tag>
+
             case "FAILED":
                 return <Tag type="red">Failed</Tag>
 
@@ -374,6 +425,27 @@ class Dashboard extends React.Component {
             default:
                 return <Tag type="gray">Unknown</Tag>;
         }
+    }
+
+    enrichHistoryForChart(history) {
+        if (!history || history.length === 0) {
+            return [];
+        }
+        const colors = {
+            COMPLETED: {bg: 'rgba(36, 161, 72, 0.5)', border: 'rgba(36, 161, 72, 1)'},
+            PARTIALBACKUP: {bg: 'rgba(218, 30, 218, 0.45)', border: 'rgba(218, 30, 218, 1)'},
+            IN_PROGRESS: {bg: 'rgba(15, 98, 254, 0.45)', border: 'rgba(15, 98, 254, 1)'},
+            FAILED: {bg: 'rgba(218, 30, 30, 0.45)', border: 'rgba(218, 30, 30, 1)'},
+            UNKNOWN: {bg: 'rgba(141, 141, 141, 0.45)', border: 'rgba(141, 141, 141, 1)'},
+        };
+        return history.map((point) => {
+            const palette = colors[point.status] || colors.UNKNOWN;
+            return {
+                ...point,
+                backgroundColor: palette.bg,
+                borderColor: palette.border
+            };
+        });
     }
 
     renderConnection(name, connectionInfo) {

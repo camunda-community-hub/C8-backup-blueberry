@@ -190,26 +190,46 @@ class Backup extends React.Component {
                 </div>
 
 
+                <InlineNotification kind="info" hideCloseButton="true" lowContrast="false"
+                                    style={{marginTop: "12px"}}>
+                    A backup is complete when every active component reports the same ID.
+                    Missing components appear in the Missing column.
+                    Optimize is omitted when its actuator URL is empty.
+                    Restore stays disabled for a partial backup.
+                </InlineNotification>
+
                 <table id="runnersTable" className="table is-hoverable is-fullwidth">
                     <thead>
                     <tr>
                         <th>ID</th>
                         <th>Status</th>
                         <th>Components</th>
+                        <th>Missing</th>
                         <th>Date</th>
                     </tr>
                     </thead>
                     <tbody>
-                    {this.state.listBackups ? this.state.listBackups.map((content, _index) =>
-                        <tr>
+                    {this.state.listBackups ? this.state.listBackups.map((content) =>
+                        <tr key={content.backupId}>
                             <td>{content.backupId}</td>
                             <td>
-                                {this.renderConnectionTag(content.backupStatus)}
+                                {this.renderConnectionTag(content.backupStatus, content.complete)}
                             </td>
                             <td>
-                                {content.components && content.components.map((component, index) => (
-                                    <Tag key={index} type="blue">{component}</Tag>
-                                ))}
+                                {content.presentComponents && content.presentComponents.length > 0
+                                    ? content.presentComponents.map((component, index) => (
+                                        <Tag key={index} type="blue">{component}</Tag>
+                                    ))
+                                    : content.components && content.components.map((component, index) => (
+                                        <Tag key={index} type="blue">{component}</Tag>
+                                    ))}
+                            </td>
+                            <td>
+                                {content.missingComponents && content.missingComponents.length > 0
+                                    ? content.missingComponents.map((component, index) => (
+                                        <Tag key={"m" + index} type="red">missing {component}</Tag>
+                                    ))
+                                    : <span className="text-muted">None</span>}
                             </td>
                             <td>{content.backupTime}</td>
                         </tr>
@@ -252,7 +272,10 @@ class Backup extends React.Component {
     }
 
 
-    renderConnectionTag(status) {
+    renderConnectionTag(status, complete) {
+        if (status === "PARTIALBACKUP" || (status === "COMPLETED" && complete === false)) {
+            return <Tag type="magenta">Partial</Tag>;
+        }
         if (!status)
             return <Tag type="gray">Unknown</Tag>;
 
@@ -265,8 +288,6 @@ class Backup extends React.Component {
                 return <Tag type="blue">In progress</Tag>;
             case "READY":
                 return <Tag type="green">Ready</Tag>;
-            case "PARTIALBACKUP":
-                return <Tag type="red">Partial backup</Tag>;
             default:
                 return <Tag type="gray">Unknown</Tag>;
 

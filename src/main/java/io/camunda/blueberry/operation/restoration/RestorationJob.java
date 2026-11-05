@@ -1,42 +1,54 @@
 package io.camunda.blueberry.operation.restoration;
 
 import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.platform.version.CamundaVersionProfile;
+import io.camunda.blueberry.platform.version.RestorePhase;
+
+import java.util.List;
 
 public class RestorationJob {
 
-    OperationLog operationLog;
+    public enum JOBSTATUS {PLANNED, INPROGRESS, REQUIRES_MANUAL_STEPS, TERMINATED, FAILED}
 
-    // Restore this backupId
-    public RestorationJob(Long backupId) {
-        OperationLog operationLog = new OperationLog();
+    private final long backupId;
+    private final CamundaVersionProfile profile;
+    private final OperationLog operationLog;
+    private JOBSTATUS jobStatus = JOBSTATUS.PLANNED;
+
+    public RestorationJob(long backupId, CamundaVersionProfile profile) {
+        this.backupId = backupId;
+        this.profile = profile;
+        this.operationLog = new OperationLog();
     }
 
-    /**
-     * run asynchronously
-     */
-    public void restoration() {
-        long beginTime = System.currentTimeMillis();
-        operationLog.startOperation("Start Restoration", 9);
+    public void run(Pwc87RestoreExecutor executor, RestoreLayout layout) {
+        jobStatus = JOBSTATUS.INPROGRESS;
+        List<RestorePhase> phases = profile.restorePhases();
+        operationLog.startOperation("Restore backup " + backupId + " (Camunda " + profile.minorVersion() + ")",
+                phases.size());
+        try {
+            executor.execute(backupId, layout, operationLog);
+            operationLog.endOperation();
+            jobStatus = JOBSTATUS.TERMINATED;
+        } catch (Exception e) {
+            operationLog.error(null, e.getMessage());
+            jobStatus = JOBSTATUS.FAILED;
+        }
+    }
 
-        // restore Operate backup
+    public long getBackupId() {
+        return backupId;
+    }
 
-        // restore TaskList backup
+    public CamundaVersionProfile getProfile() {
+        return profile;
+    }
 
-        // Restore Optimize
+    public OperationLog getOperationLog() {
+        return operationLog;
+    }
 
-        // Restore Zeebe Record
-
-        // Scale down Zeebe
-
-        // create one restore pod per cluster size, and start it
-
-        // monitor each pod
-
-        // Finish? Then stop all restoration pod
-
-        // scale up Zeebe
-
-
-        operationLog.endOperation();
+    public JOBSTATUS getJobStatus() {
+        return jobStatus;
     }
 }

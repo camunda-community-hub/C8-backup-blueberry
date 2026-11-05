@@ -130,6 +130,12 @@ public class BackupManager {
         return listBackupResult;
     }
 
+    public List<BackupCompleteness.Detail> getBackupCompletenessDetails() throws OperationException {
+        ListBackupResult listBackupResult = getListBackups();
+        var required = BackupCompleteness.requiredActiveComponents(listBackupComponents);
+        return BackupCompleteness.fromList(listBackupResult.listBackups, required);
+    }
+
     /**
      * Merge the two list
      *

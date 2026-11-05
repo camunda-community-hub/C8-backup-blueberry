@@ -31,9 +31,27 @@ public class BlueberryConfig {
     @Value("${blueberry.namespace:camunda}")
     private String namespace;
 
-
     @Value("${blueberry.kubeConfig:}")
     private String kubeConfig;
+
+    /** Optional kubectl context name (e.g. kind-camunda-platform-local). Uses ~/.kube/config when kubeConfig is unset. */
+    @Value("${blueberry.kubeContext:}")
+    private String kubeContext;
+
+    @Value("${blueberry.restore.execution:false}")
+    private boolean restoreExecution;
+
+    @Value("${blueberry.restore.helmRelease:camunda87helm}")
+    private String restoreHelmRelease;
+
+    @Value("${blueberry.restore.elasticsearchRepository:}")
+    private String restoreElasticsearchRepository;
+
+    @Value("${blueberry.restore.podDeleteTimeoutSeconds:300}")
+    private int restorePodDeleteTimeoutSeconds;
+
+    @Value("${blueberry.restore.zeebeRestoreTimeoutSeconds:1800}")
+    private int restoreZeebeTimeoutSeconds;
 
 
     /**
@@ -121,6 +139,26 @@ public class BlueberryConfig {
         return namespace;
     }
 
+    public boolean isRestoreExecutionEnabled() {
+        return restoreExecution;
+    }
+
+    public String getRestoreHelmRelease() {
+        return restoreHelmRelease;
+    }
+
+    public String getRestoreElasticsearchRepository() {
+        return restoreElasticsearchRepository;
+    }
+
+    public int getRestorePodDeleteTimeoutSeconds() {
+        return restorePodDeleteTimeoutSeconds;
+    }
+
+    public int getRestoreZeebeTimeoutSeconds() {
+        return restoreZeebeTimeoutSeconds;
+    }
+
     public String getAzureContainerName() {
         return azureContainerName;
     }
@@ -155,6 +193,10 @@ public class BlueberryConfig {
 
     public String getKubeConfig() {
         return kubeConfig == null || kubeConfig.trim().isEmpty() ? null : kubeConfig;
+    }
+
+    public String getKubeContext() {
+        return kubeContext == null || kubeContext.trim().isEmpty() ? null : kubeContext.trim();
     }
 
     public String getOperateRepository() {

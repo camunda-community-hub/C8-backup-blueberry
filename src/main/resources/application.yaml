@@ -5,6 +5,20 @@ blueberry:
   zeebeActuatorUrl: http://camunda-zeebe:9600
   elasticsearchurl: http://camunda-elasticsearch:9200
 
+  namespace: camunda
+  # Path to kubeconfig when Blueberry runs outside the cluster (for restore and K8s exploration).
+  # kubeConfig: /Users/you/.kube/config
+  # kubectl context when ~/.kube/config has several clusters (e.g. GKE + kind). Avoids GKE exec auth for local dev.
+  # kubeContext: kind-camunda-platform-local
+
+  # PwC Camunda 8.7 restore. execution stays false until you intend to delete indices and Zeebe volumes.
+  restore:
+    execution: false
+    helmRelease: camunda87helm
+    elasticsearchRepository: camunda-backups
+    podDeleteTimeoutSeconds: 300
+    zeebeRestoreTimeoutSeconds: 1800
+
   # This information is temporary. They must come from the pod itself
   operateRepository: operaterepository
   tasklistRepository: tasklistrepository

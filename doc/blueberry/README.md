@@ -28,7 +28,29 @@ The application is accessible under localhost:9082
 ## Blueberry user interface
 
 ### Dashboard page
-The dashboard gives you a main overview on the backup.
+The dashboard shows backup status for the cluster.
+
+The **Backup timeline** chart lists up to **20** most recent backup IDs from the merged backup list (newest first).
+Bar colors reflect status: complete, partial, in progress, failed, or unknown.
+
+The backup card shows these counts:
+
+- Total backups
+- Complete backups (all active components reported the ID)
+- Partial backups (one or more active components did not report the ID)
+- Failed backups
+- **Latest backup** — highest backup ID, status, and time when available
+- **In progress** — warning banner and step text while a backup job is running
+
+The **Cluster parameters** card shows topology (size, partitions, replication factor) and **Zeebe exporter** status
+(exporters enabled/disabled). This is not the same as broker export *pause* during backup; pause is handled inside the backup job.
+
+**Scheduler** on the dashboard stays inactive until the scheduler feature is implemented (v2).
+
+Use **Refresh** to reload dashboard data. The page auto-refreshes dashboard data every **2 minutes** and connections every **60 seconds**.
+
+If the timeline is empty, either no backups exist yet or Blueberry cannot reach Zeebe/actuator endpoints (see Connection card).
+
 ![Blueberry_Dashboard.png](images/Blueberry_Dashboard.png)
 
 ### Backup page
@@ -42,12 +64,93 @@ To initiate a new backup, click "Start Backup." Blueberry will automatically cal
 
 If you need to start a backup with a specific ID, simply enter the desired ID and then start the backup manually.
 
+### Backup completeness
+
+Blueberry marks a backup **complete** when two conditions are true:
+
+- The merged status is `COMPLETED`.
+- Every active component reports that backup ID.
+
+Blueberry marks a backup **partial** when the merged status is `COMPLETED` and one or more active components do not report that ID.
+
+The Backup page shows the present components and the missing components for each ID.
+
+Optimize is optional. If `blueberry.optimizeActuatorUrl` is empty, Blueberry omits Optimize from the required set.
+
+A partial backup cannot start a restore. The Restore button stays disabled for a partial backup.
+
 
 ![Blueberry_Backup.png](images/Blueberry_Backup.png)
 
 ### Restore page
 
-In development
+The Restore page lists backups from the same API as the Backup page.
+
+Each row shows backup ID, time, status, and components.
+
+1. Click **Restore** on a complete backup row.
+2. Read the preflight result in the confirm dialog.
+3. Click **Start restore** only when live restore is enabled.
+
+For Camunda **8.7**, Start restore follows the PwC 8.7 runbook:
+
+1. Stop Operate, Tasklist, Optimize, the Zeebe gateway, and Zeebe. Elasticsearch stays up.
+2. Start the components once so they create index templates, then stop them again.
+3. Delete indices whose names contain operate, tasklist, optimize, or zeebe.
+4. Restore each snapshot for that backup ID. The request has no index filter.
+5. Delete Zeebe persistent volume claims.
+6. Set `ZEEBE_RESTORE=true` and `ZEEBE_RESTORE_FROM_BACKUP_ID` on the Zeebe StatefulSet, then scale the brokers up.
+7. Remove those variables, start the other components, and restart Zeebe.
+
+Live restore stays off until `blueberry.restore.execution` is `true`.
+Restore uses the **Kubernetes API** (Fabric8) and **Elasticsearch HTTP** — not shell scripts or simulated steps.
+Set `blueberry.kubeConfig` when Blueberry runs outside the cluster.
+
+If your kubeconfig includes **GKE** (`gke-gcloud-auth-plugin`) and **local** clusters (kind, Docker Desktop),
+set `blueberry.kubeContext` to the cluster you want (for example `kind-camunda-platform-local`). Blueberry uses
+that context instead of whatever is selected in `kubectl config current-context`.
+
+On startup, Fabric8 may log `Error unmarshalling ExecCredential` when the GKE plugin returns non-JSON output
+(expired `gcloud` login, plugin not on `PATH` for the JVM, or wrong context). That is usually a **WARN**, not a
+crash. Fix GKE auth with:
+
+```shell
+gcloud auth login
+gcloud container clusters get-credentials YOUR_CLUSTER --region YOUR_REGION
+kubectl get nodes
+which gke-gcloud-auth-plugin
+```
+
+Ensure the same `PATH` is visible to the process that starts Blueberry (IDE run configuration or terminal).
+Check `GET /blueberry/api/restore/readiness` before you start.
+The Helm release default is `camunda87helm` in namespace `camunda`.
+The Elasticsearch repository default is `camunda-backups`.
+The Helm chart must be **12.1.0** or later. Older charts ignore `ZEEBE_RESTORE`.
+
+If a step fails after the index deletion, Blueberry does not start the applications again.
+
+Other Camunda minors keep a manual restore plan.
+
+**API endpoints**
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/blueberry/api/restore/readiness` | Kubernetes + Elasticsearch connectivity and workload presence |
+| GET | `/blueberry/api/restore/phases` | Phase list for the active Camunda version |
+| GET | `/blueberry/api/restore/preflight?backupId=` | Completeness gate before restore |
+| POST | `/blueberry/api/restore/start` | Start restore plan (`{"backupId": n}`) |
+| GET | `/blueberry/api/restore/monitor` | Progress and operation log |
+
+The **Restore** button stays disabled when the backup is partial or incomplete.
+
+### Camunda version selector
+
+Use the version list in the top bar to select Camunda **8.7**, **8.8**, **8.9**, or **8.10**.
+
+The selection is stored in the browser and sent to the server.
+
+Doc links for backup and restore follow the selected version.
+The default version is **8.7**.
 
 ### Scheduler page
 
