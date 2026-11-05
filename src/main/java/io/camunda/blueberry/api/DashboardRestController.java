@@ -1,6 +1,7 @@
 package io.camunda.blueberry.api;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
 import io.camunda.blueberry.operation.OperationLog;
 import io.camunda.blueberry.operation.backup.BackupJob;
@@ -35,9 +36,8 @@ public class DashboardRestController {
 
     private final ZeebeConnect zeebeConnect;
     private final ElasticSearchConnect elasticSearchConnect;
-    private final OperateConnect operateConnect;
-    private final TaskListConnect taskListConnect;
     private final OptimizeConnect optimizeConnect;
+    private final BlueberryConfig blueberryConfig;
 
     Logger logger = LoggerFactory.getLogger(DashboardRestController.class);
 
@@ -45,16 +45,14 @@ public class DashboardRestController {
                                    BackupManager backupManager,
                                    ZeebeConnect zeebeConnect,
                                    ElasticSearchConnect elasticSearchConnect,
-                                   OperateConnect operateConnect,
-                                   TaskListConnect taskListConnect,
-                                   OptimizeConnect optimizeConnect) {
+                                   OptimizeConnect optimizeConnect,
+                                   BlueberryConfig blueberryConfig) {
         this.explorationCluster = explorationCluster;
         this.backupManager = backupManager;
         this.zeebeConnect = zeebeConnect;
         this.elasticSearchConnect = elasticSearchConnect;
-        this.operateConnect = operateConnect;
-        this.taskListConnect = taskListConnect;
         this.optimizeConnect = optimizeConnect;
+        this.blueberryConfig = blueberryConfig;
     }
 
     @GetMapping(value = "/api/dashboard/all", produces = "application/json")
@@ -103,6 +101,8 @@ public class DashboardRestController {
 
             Rule.RuleStatus ruleStatus = explorationCluster.rulesOk();
             status.configuration.statusConfiguration = ruleStatus == null ? "" : ruleStatus.toString();
+            status.configuration.elasticsearch = blueberryConfig.isElasticsearchEnabled() ? "enabled" : "disabled";
+            status.configuration.optimize = blueberryConfig.isOptimizeEnabled() ? "enabled" : "disabled";
 
             return status;
 
@@ -120,16 +120,12 @@ public class DashboardRestController {
                     "zeebe", toMap(zeebeConnect.isConnectedInformation()),
                     "zeebeActuator", toMap(zeebeConnect.isConnectedActuatorInformation()),
                     "elasticsearch", toMap(elasticSearchConnect.isConnectedInformation()),
-                    "operate", toMap(operateConnect.isConnectedInformation()),
-                    "tasklist", toMap(taskListConnect.isConnectedInformation()),
                     "optimize", toMap(optimizeConnect.isConnectedInformation())
             );
         } catch (Exception e) {
             return Map.of("status", "Error running check connection " + e.getMessage(),
                     "zeebe", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
                     "elasticsearch", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
-                    "operate", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
-                    "tasklist", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
                     "optimize", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS)
             );
         }
@@ -192,6 +188,12 @@ public class DashboardRestController {
 
         @JsonProperty
         String statusConfiguration;
+
+        @JsonProperty
+        String elasticsearch; // "enabled" or "disabled", from blueberry.elasticsearch.enabled
+
+        @JsonProperty
+        String optimize; // "enabled" or "disabled", from blueberry.optimize.enabled
 
     }
 }

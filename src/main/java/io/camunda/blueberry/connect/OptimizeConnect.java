@@ -39,7 +39,8 @@ public class OptimizeConnect implements CamundaApplicationInt {
 
     @Override
     public boolean isActive() {
-        return blueberryConfig.getOptimizeActuatorUrl() != null && blueberryConfig.getOptimizeActuatorUrl().length() > 0;
+        // Only when blueberry.optimize.enabled is true
+        return blueberryConfig.isOptimizeEnabled() && blueberryConfig.getOptimizeActuatorUrl() != null && blueberryConfig.getOptimizeActuatorUrl().length() > 0;
     }
 
     /**

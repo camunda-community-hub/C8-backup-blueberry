@@ -18,10 +18,6 @@ public class RestorationJob {
         long beginTime = System.currentTimeMillis();
         operationLog.startOperation("Start Restoration", 9);
 
-        // restore Operate backup
-
-        // restore TaskList backup
-
         // Restore Optimize
 
         // Restore Zeebe Record

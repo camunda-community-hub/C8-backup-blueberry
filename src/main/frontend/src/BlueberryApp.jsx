@@ -16,6 +16,7 @@ import Dashboard from "./dashboard/Dashboard";
 import Scheduler from "./scheduler/Scheduler";
 import Backup from "./backup/Backup"
 import Restore from "./restore/Restore"
+import CheckData from "./checkdata/CheckData"
 import Configuration from "./configuration/Configuration"
 import Parameters from "./parameters/Parameters";
 import OperationLog from "./operationlog/OperationLog"
@@ -24,8 +25,10 @@ import HeaderMessage from "./HeaderMessage/HeaderMessage";
 const FRAME_NAME = {
   DASHBOARD: "Dashboard",
   BACKUP: "Backup",
+  OPERATIONLOG: "OperationLog",
   SCHEDULER: "Scheduler",
   RESTORE: "Restore",
+  CHECKDATA: "CheckData",
   CONFIGURATION: "Configuration",
   PARAMETERS: "Parameters"
 
@@ -66,6 +69,14 @@ class BlueberryApp extends React.Component {
               }}>{FRAME_NAME.RESTORE}</Nav.Link>
 
               <Nav.Link onClick={() => {
+                this.clickMenu(FRAME_NAME.OPERATIONLOG)
+              }}>{FRAME_NAME.OPERATIONLOG}</Nav.Link>
+
+              <Nav.Link onClick={() => {
+                this.clickMenu(FRAME_NAME.CHECKDATA)
+              }}>{FRAME_NAME.CHECKDATA}</Nav.Link>
+
+              <Nav.Link onClick={() => {
                 this.clickMenu(FRAME_NAME.SCHEDULER)
               }}>{FRAME_NAME.SCHEDULER}</Nav.Link>
 
@@ -86,6 +97,8 @@ class BlueberryApp extends React.Component {
         {this.state.frameContent === FRAME_NAME.BACKUP && <Backup/>}
         {this.state.frameContent === FRAME_NAME.SCHEDULER && <Scheduler/>}
         {this.state.frameContent === FRAME_NAME.RESTORE && <Restore/>}
+        {this.state.frameContent === FRAME_NAME.OPERATIONLOG && <OperationLog/>}
+        {this.state.frameContent === FRAME_NAME.CHECKDATA && <CheckData/>}
         {this.state.frameContent === FRAME_NAME.CONFIGURATION && <Configuration/>}
         {this.state.frameContent === FRAME_NAME.PARAMETERS && <Parameters/>}
 

@@ -1,7 +1,8 @@
 package io.camunda.blueberry.connect;
 
 /**
- * Multiples component (Operate, TaskList, Optimize) react as the same way. To Simplify the management, they are mark as a "component"
+ * Optimize and Zeebe react the same way. To simplify the management, they are marked as a "component".
+ * Operate and Tasklist are no longer separate applications since 8.10: their data is in the RDBMS, backed up with Zeebe.
  */
 public interface CamundaApplicationInt extends BackupComponentInt {
     boolean exist();
@@ -13,7 +14,10 @@ public interface CamundaApplicationInt extends BackupComponentInt {
      */
     COMPONENT getComponent();
 
-    enum COMPONENT {TASKLIST, OPERATE, OPTIMIZE, ZEEBERECORD, ZEEBE}
+    /**
+     * ZEEBERECORD is the Elasticsearch snapshot of the zeebe-record indices, needed by Optimize.
+     */
+    enum COMPONENT {OPTIMIZE, ZEEBERECORD, ZEEBE}
 
 
     class ConnectionInfo {

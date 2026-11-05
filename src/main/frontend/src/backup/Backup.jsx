@@ -10,20 +10,20 @@ import React from 'react';
 import RestCallService from "../services/RestCallService";
 import ControllerPage from "../component/ControllerPage";
 
-import {Button, Checkbox, InlineNotification, Tag, TextInput} from "carbon-components-react";
+import {Button, InlineNotification, Tag, TextInput, Dropdown} from "carbon-components-react";
 import {ArrowRepeat} from "react-bootstrap-icons";
 import {Card} from "react-bootstrap";
 
+const items = [{ id: "EXPLICIT", text: "Explicit" }, { id: "NEXTID", text: "Next id" }, { id: "TIMEBACKUP", text: "Time backup (yyyymmddHHMM" },];
 
 class Backup extends React.Component {
-
 
     constructor(_props) {
         super();
 
         this.state = {
             display: {loading: false},
-            parameter: {explicit: false, backupId: ''},
+            parameter: {backupId: '',  backupPolicy: "EXPLICIT" },
             resultCall: {status: 200, error: "", message: "", component: ""},
             listBackups: [],
             listUrlsBackup: [],
@@ -49,8 +49,12 @@ class Backup extends React.Component {
         clearInterval(this.intervalId);
     }
 
+
     /*           {JSON.stringify(this.state.runners, null, 2) } */
     render() {
+        const selectedPolicyItem = items.find(
+            (item) => item.id === this.state.parameter.backupPolicy
+        );
         return (
             <div className={"container"}>
                 <div className="row" style={{width: "100%"}}>
@@ -80,23 +84,27 @@ class Backup extends React.Component {
                                 style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}}>Backup</Card.Header>
                             <Card.Body>
 
-                                <Checkbox
-                                    id="chooseBackup"
-                                    labelText="Give explicit backupId"
-                                    checked={this.state.parameter.explicit}
-                                    onChange={(event) => {
-                                        var parameter = this.state.parameter;
-                                        console.log("Parameters=[" + parameter + "] checked=" + event.target.checked);
-                                        parameter.explicit = event.target.checked;
-                                        this.setState({"parameter": parameter})
-                                    }}
+                                <Dropdown
+                                    id="backup-type-dropdown"
+                                    label="Select backup type"
+                                    items={items}
+                                    itemToString={(item) => (item ? item.text : "")}
+                                    selectedItem={selectedPolicyItem}
+                                    onChange={({ selectedItem }) =>
+                                        this.setState((prevState) => ({
+                                            parameter: {
+                                                ...prevState.parameter,
+                                                backupPolicy: selectedItem.id,
+                                            },
+                                        }))
+                                    }
                                 />
 
                                 <TextInput
                                     className="m-3"
                                     id="explicitId"
                                     labelText="Explicit ID (number only)"
-                                    disabled={!this.state.parameter.explicit}
+                                    disabled={this.state.parameter.backupPolicy !== 'NEXTID'}
                                     value={this.state.parameter.backupId}
                                     type="number"
                                     onChange={(event) => {

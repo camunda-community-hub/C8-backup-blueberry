@@ -72,7 +72,7 @@ public class KubernetesConnect {
     }
 
     /**
-     * Explore the component to retrieve the repository. For example, Operate defined a variable CAMUNDA_OPERATE_BACKUP_REPOSITORY_NAME
+     * Explore the component to retrieve the repository. For example, Optimize defined a variable CAMUNDA_OPTIMIZE_BACKUP_REPOSITORY_NAME
      *
      * @param component component to explore
      * @param nameSpace namespace
@@ -82,18 +82,6 @@ public class KubernetesConnect {
         // Soon: ask the pod informatoin and read it from it
         OperationResult operationResult = new OperationResult();
         switch (component) {
-            case OPERATE:
-                operationResult.resultSt = blueberryConfig.getOperateRepository();
-                operationResult.success = true;
-                operationResult.command = "kubectl describe pod operate";
-                break;
-
-            case TASKLIST:
-                operationResult.resultSt = blueberryConfig.getTasklistRepository();
-                operationResult.success = true;
-                operationResult.command = "kubectl describe pod tasklist";
-                break;
-
             case OPTIMIZE:
                 operationResult.resultSt = blueberryConfig.getOptimizeRepository();
                 operationResult.success = true;

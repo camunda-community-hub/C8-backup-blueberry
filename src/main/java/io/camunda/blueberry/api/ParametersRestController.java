@@ -1,10 +1,7 @@
 package io.camunda.blueberry.api;
 
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.OperateConnect;
 import io.camunda.blueberry.connect.ZeebeConnect;
-import io.camunda.blueberry.platform.rule.AccessParameterValue;
-import io.camunda.blueberry.platform.rule.RuleOperateRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,18 +18,14 @@ import java.util.Map;
 public class ParametersRestController {
     Logger logger = LoggerFactory.getLogger(ParametersRestController.class);
     @Autowired
-    RuleOperateRepository ruleOperateRepository;
-    @Autowired
     private BlueberryConfig blueberryConfig;
     @Autowired
     private ZeebeConnect zeebeConnect;
-    @Autowired
-    private OperateConnect operateConnect;
 
     /**
      * Check the system
      * Does Zeebe declare a container? A Type storage?
-     * Does Elasticsearch as repository for each component like OperateConnect?
+     * Does Elasticsearch define a repository for each component (Optimize, ZeebeRecord)?
      *
      * @return
      */
@@ -43,12 +36,6 @@ public class ParametersRestController {
             Map<String, Object> allParameters = new HashMap<>();
             allParameters.putAll(blueberryConfig.getAll());
             allParameters.putAll(zeebeConnect.getParameters());
-
-
-            AccessParameterValue.ResultParameter resultParameter = ruleOperateRepository.accessParameters();
-            allParameters.put("operateSource", resultParameter.accessActuator ? "Operate Actuator" : "Blueberry Configuration");
-            allParameters.put("operateRepository", resultParameter.parameters.get("operateRepository"));
-
 
             return allParameters;
 

@@ -31,7 +31,7 @@ public class PlatformManager {
     /**
      * Check the system
      * Does Zeebe declare a container? A Type storage?
-     * Does Elasticsearch as repository for each component like OperateConnect?
+     * Does Elasticsearch as repository for each component for Optimize?
      *
      * @return
      */

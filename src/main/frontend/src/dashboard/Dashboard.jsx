@@ -38,6 +38,8 @@ class Dashboard extends React.Component {
                 },
                 configuration: {
                     statusConfiguration: "CORRECT",
+                    elasticsearch: "disabled",
+                    optimize: "enabled",
                 },
                 scheduler: {
                     statusScheduler: "INACTIF",
@@ -50,8 +52,6 @@ class Dashboard extends React.Component {
             connection: {
                 zeebe: {connection: "VERIFICATION_IN_PROGRESS"},
                 elasticsearch: {connection: "VERIFICATION_IN_PROGRESS"},
-                operate: {connection: "VERIFICATION_IN_PROGRESS"},
-                tasklist: {connection: "VERIFICATION_IN_PROGRESS"},
                 optimize: {connection: "VERIFICATION_IN_PROGRESS"},
                 status: ""
             },
@@ -194,6 +194,24 @@ class Dashboard extends React.Component {
                                             {this.state.dashboard.scheduler.cron}
                                         </td>
                                     </tr>
+                                    <tr>
+                                        <td>ElasticSearch</td>
+                                        <td style={{textAlign: "center"}}>
+                                            {this.state.dashboard.configuration.elasticsearch === "enabled" &&
+                                                <Tag type="green">enabled</Tag>}
+                                            {this.state.dashboard.configuration.elasticsearch !== "enabled" &&
+                                                <Tag type="gray">disabled</Tag>}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Optimize</td>
+                                        <td style={{textAlign: "center"}}>
+                                            {this.state.dashboard.configuration.optimize === "enabled" &&
+                                                <Tag type="green">enabled</Tag>}
+                                            {this.state.dashboard.configuration.optimize !== "enabled" &&
+                                                <Tag type="gray">disabled</Tag>}
+                                        </td>
+                                    </tr>
                                 </table>
                             </Card.Body>
                         </Card>
@@ -247,18 +265,14 @@ class Dashboard extends React.Component {
                                         <td style={{textAlign: "center"}}>
                                             {this.renderConnection("Zeebe Actuator", this.state.connection?.zeebeActuator)}
                                         </td>
-                                        <td>
-                                            {this.renderConnection("ElasticSearch", this.state.connection?.elasticsearch)}
-                                        </td>
-                                        <td>
-                                            {this.renderConnection("Operate", this.state.connection?.operate)}
-                                        </td>
-                                        <td>
-                                            {this.renderConnection("TaskList", this.state.connection?.tasklist)}
-                                        </td>
-                                        <td>
-                                            {this.renderConnection("Optimize", this.state.connection?.optimize)}
-                                        </td>
+                                        {this.state.dashboard.configuration.elasticsearch === "enabled" &&
+                                            <td>
+                                                {this.renderConnection("ElasticSearch", this.state.connection?.elasticsearch)}
+                                            </td>}
+                                        {this.state.dashboard.configuration.optimize === "enabled" &&
+                                            <td>
+                                                {this.renderConnection("Optimize", this.state.connection?.optimize)}
+                                            </td>}
                                     </tr>
                                     <tr>
                                         <td colSpan="4">

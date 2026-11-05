@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Operate define a repository, and the repository exist in ElasticSearch
+ * Optimize defines a repository, and the repository exists in ElasticSearch
  */
 @Component
 public class RuleOptimizeRepository implements Rule {
@@ -26,7 +26,7 @@ public class RuleOptimizeRepository implements Rule {
     private final AccessParameterValue accessParameterValue;
 
     RuleOptimizeRepository(BlueberryConfig blueberryConfig, KubernetesConnect kubernetesConnect, ElasticSearchConnect elasticSearchConnect,
-                           OperateConnect operateConnect, AccessParameterValue accessParameterValue) {
+                           AccessParameterValue accessParameterValue) {
         this.blueberryConfig = blueberryConfig;
         this.kubernetesConnect = kubernetesConnect;
         this.elasticSearchConnect = elasticSearchConnect;
@@ -35,8 +35,8 @@ public class RuleOptimizeRepository implements Rule {
 
     @Override
     public boolean validRule() {
-        // is Operate is define in the cluster?
-        return blueberryConfig.getOptimizeActuatorUrl() != null;
+        // is Optimize enabled and defined in the cluster?
+        return blueberryConfig.isOptimizeEnabled() && blueberryConfig.getOptimizeActuatorUrl() != null;
     }
 
     @Override
@@ -78,7 +78,7 @@ public class RuleOptimizeRepository implements Rule {
             return ruleInfo;
         }
 
-        // ---------- First step, ask Operate for the name of the repository
+        // ---------- First step, ask Optimize for the name of the repository
         ruleInfo.setStatus(RuleStatus.INPROGRESS);
 
         AccessParameterValue.ResultParameter resultParameter;
@@ -136,7 +136,7 @@ public class RuleOptimizeRepository implements Rule {
             }
             ruleInfo.addVerifications("Check Elasticsearch repository [" + optimizeRepository
 
-                            + "] basePath[" + blueberryConfig.getOperateContainerBasePath()
+                            + "] basePath[" + blueberryConfig.getOptimizeContainerBasePath()
                             + "] " + operationResult.details,
                     operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);
@@ -156,7 +156,7 @@ public class RuleOptimizeRepository implements Rule {
         } catch (CommunicationException e) {
             AccessParameterValue.ResultParameter resultParameter = new AccessParameterValue.ResultParameter();
             resultParameter.accessActuator = false;
-            resultParameter.parameters.put(OPTIMIZE_REPOSITORY, blueberryConfig.getOperateRepository());
+            resultParameter.parameters.put(OPTIMIZE_REPOSITORY, blueberryConfig.getOptimizeRepository());
             return resultParameter;
         }
 
@@ -165,11 +165,6 @@ public class RuleOptimizeRepository implements Rule {
     private String getRepositoryByConfiguration(RuleInfo ruleInfo) {
         ruleInfo.addDetails("Access RepositoryName from Blueberry configuration");
         return blueberryConfig.getOptimizeRepository();
-    }
-
-    private String getRepositoryByOperateEnvironment(RuleInfo ruleInfo) {
-        ruleInfo.addDetails("Access RepositoryName exploring Operate environment");
-        return null;
     }
 
     private String getRepositoryKubernetes(RuleInfo ruleInfo) {

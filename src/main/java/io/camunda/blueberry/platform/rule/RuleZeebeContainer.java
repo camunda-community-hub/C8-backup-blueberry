@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * Operate define a repository, and the repository exist in ElasticSearch
+ * Zeebe record repository is defined in ElasticSearch
  */
 @Component
 public class RuleZeebeContainer implements Rule {

@@ -7,10 +7,9 @@ import io.camunda.blueberry.connect.toolbox.WebActuator;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
-import io.camunda.zeebe.client.ZeebeClient;
-import io.camunda.zeebe.client.ZeebeClientConfiguration;
-import io.camunda.zeebe.client.api.response.Topology;
-import io.camunda.zeebe.spring.client.configuration.ZeebeClientConfigurationImpl;
+import io.camunda.client.CamundaClient;
+import io.camunda.client.CamundaClientConfiguration;
+import io.camunda.client.api.response.Topology;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -22,34 +21,36 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.StreamSupport;
 
 @Component
 public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     private final ObjectMapper objectMapper;
-    private final ZeebeClientConfigurationImpl zeebeClientConfiguration;
+    private final CamundaClient camundaClient;
+    private final CamundaClientConfiguration camundaClientConfiguration;
     private final BlueberryConfig blueberryConfig;
     private final RestTemplate restTemplate;
     private final WebActuator webActuator;
     Logger logger = LoggerFactory.getLogger(ZeebeConnect.class);
-    private ZeebeClient myZeebeClient;
     private long lastTentativeConnection = 0;
 
-    public ZeebeConnect(BlueberryConfig blueberryConfig, RestTemplate restTemplate, ObjectMapper objectMapper, ZeebeClientConfigurationImpl zeebeClientConfiguration) {
+    /**
+     * The CamundaClient is created by the Spring Boot SDK starter (camunda.client.* properties)
+     */
+    public ZeebeConnect(BlueberryConfig blueberryConfig, RestTemplate restTemplate, ObjectMapper objectMapper, CamundaClient camundaClient) {
         super(restTemplate);
         webActuator = new WebActuator(restTemplate);
         this.blueberryConfig = blueberryConfig;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
-        this.zeebeClientConfiguration = zeebeClientConfiguration;
+        this.camundaClient = camundaClient;
+        this.camundaClientConfiguration = camundaClient.getConfiguration();
     }
 
     public boolean connection() {
         boolean isConnected = isConnected();
-        logger.info("Connection: already connected {} connect to Grpc[{}}]", isConnected, zeebeClientConfiguration.getGrpcAddress());
+        logger.info("Connection: already connected {} connect to Grpc[{}]", isConnected, camundaClientConfiguration.getGrpcAddress());
 
         if (isConnected)
             return true;
@@ -58,8 +59,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         lastTentativeConnection = System.currentTimeMillis();
 
         try {
-            this.myZeebeClient = ZeebeClient.newClient(zeebeClientConfiguration);
-            final Topology topology = myZeebeClient.newTopologyRequest().send().join();
+            final Topology topology = camundaClient.newTopologyRequest().send().join();
             return true;
         } catch (Exception e) {
             logger.error("During Zeebe connection", e);
@@ -73,12 +73,12 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     /**
      * Return true if the Zeebe client is connected
      *
-     * @return
+     * @return true if connected to the Zeebe engine
      */
     public boolean isConnected() {
 
         try {
-            final Topology topology = myZeebeClient.newTopologyRequest().send().join();
+            final Topology topology = camundaClient.newTopologyRequest().send().join();
             return true;
 
         } catch (Exception e) {
@@ -104,10 +104,10 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     /**
      * Return the connection information plus informatin on the way to connect, in order to give back more feedback
      *
-     * @return
+     * @return connection information
      */
     public CamundaApplicationInt.ConnectionInfo isConnectedInformation() {
-        return new CamundaApplicationInt.ConnectionInfo(isConnected(), "Grpc Connection[" + zeebeClientConfiguration.getGrpcAddress() + "]");
+        return new CamundaApplicationInt.ConnectionInfo(isConnected(), "Grpc Connection[" + camundaClientConfiguration.getGrpcAddress() + "]");
     }
 
     public boolean isConnectedActuator() {
@@ -126,13 +126,22 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         return connection();
     }
 
+    /**
+     * Get the cluster information. if not connected, return null
+     *
+     * @return cluster information, null in case of issue
+     */
     public ClusterInformation getClusterInformation() {
         try {
-            final Topology topology = myZeebeClient.newTopologyRequest().send().join();
+            if (!activateConnection()) {
+                return null;
+            }
+            final Topology topology = camundaClient.newTopologyRequest().send().join();
             ClusterInformation clusterInformation = new ClusterInformation();
             clusterInformation.clusterSize = topology.getClusterSize();
             clusterInformation.partitionsCount = topology.getPartitionsCount();
             clusterInformation.replicationFactor = topology.getReplicationFactor();
+            clusterInformation.camundaVersion = topology.getGatewayVersion();
 
             return clusterInformation;
         } catch (Exception e) {
@@ -141,20 +150,20 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         }
     }
 
-    public ZeebeClientConfiguration getZeebeConfiguration() {
-        return zeebeClientConfiguration;
+    public CamundaClientConfiguration getZeebeConfiguration() {
+        return camundaClientConfiguration;
     }
 
     public Map<String, Object> getParameters() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("zeebeIsConnected", isConnected());
-        for (Method method : zeebeClientConfiguration.getClass().getMethods()) {
+        for (Method method : camundaClientConfiguration.getClass().getMethods()) {
             if (method.getName().startsWith("get") &&
                     method.getParameterCount() == 0 &&
                     !method.getReturnType().equals(void.class)) {
                 String propertyName = lowerCaseFirstLetter(method.getName().substring(3));
                 try {
-                    Object value = method.invoke(zeebeClientConfiguration);
+                    Object value = method.invoke(camundaClientConfiguration);
                     if (value instanceof Duration)
                         parameters.put(propertyName, ((Duration) value).toString());
                     else
@@ -221,10 +230,11 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
 
         CamundaApplicationInt.BackupOperation backupOperation = new CamundaApplicationInt.BackupOperation();
 
+        // 8.10: runtime backup of the cluster (Zeebe + RDBMS secondary storage), see https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/rdbms/rdbms-backup/#manual-backup
         Map<String, Object> backupBody = Map.of("backupId", backupId);
-        ResponseEntity<String> backupResponse = restTemplate.postForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups", backupBody, String.class);
+        ResponseEntity<String> backupResponse = restTemplate.postForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/backupRuntime", backupBody, String.class);
 
-        logger.info("Backup status response for url {}: {}, {}", blueberryConfig.getZeebeActuatorUrl(), backupResponse.getStatusCodeValue(), backupResponse.getBody());
+        logger.info("Backup status response for url {}: {}, {}", blueberryConfig.getZeebeActuatorUrl(), backupResponse.getStatusCode().value(), backupResponse.getBody());
         backupOperation.status = backupResponse.getStatusCode().value();
 
         if (backupResponse.getStatusCode().is2xxSuccessful()) {
@@ -279,7 +289,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             backupOperation.status = response.getStatusCode().value();
 
             logger.info("Backup status response for URL {}: {}, {}",
-                    blueberryConfig.getZeebeActuatorUrl(), response.getStatusCodeValue(), response.getBody());
+                    blueberryConfig.getZeebeActuatorUrl(), response.getStatusCode().value(), response.getBody());
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 try {
@@ -352,6 +362,50 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     /*                                                                      */
     /* ******************************************************************** */
 
+
+    /**
+     * call :actuator/partitions
+     *
+     * @return
+     * @throws OperationException
+     */
+    public List<PartitionInfo> getPartitionInformation(int brokerId) throws OperationException {
+        ResponseEntity<BackupInfo> backupStatusResponse = null;
+        String url = blueberryConfig.getZeebeBrokerActuatorUrl(brokerId) + "/actuator/partitions";
+        try {
+            logger.info("ZeebeConnect: getPartitionInformation Execute [{}]", url);
+            ResponseEntity<JsonNode> listResponse = restTemplate.getForEntity(url, JsonNode.class);
+            JsonNode jsonArray = listResponse.getBody();
+            if (jsonArray == null)
+                throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.PARTITIONS_INFO, "Can't connect",
+                        "No answer from [" + blueberryConfig.getZeebeActuatorUrl() + "/actuator/partitions]");
+
+            List<PartitionInfo> listPartitionInfo = new ArrayList<>();
+
+            Iterator<String> fieldNames = jsonArray.fieldNames();
+            while (fieldNames.hasNext()) {
+                String partitionId = fieldNames.next();
+                JsonNode partitionNode = jsonArray.get(partitionId);
+                PartitionInfo partitionInfo = new PartitionInfo();
+                partitionInfo.brokerId = brokerId;
+                partitionInfo.partitionId = Integer.parseInt(partitionId);
+                partitionInfo.role = partitionNode.get("role").asText();
+                partitionInfo.processedPosition = partitionNode.get("processedPosition").asLong();
+                partitionInfo.processedPositionInSnapshot = partitionNode.get("processedPositionInSnapshot").asLong();
+                partitionInfo.exportedPosition = partitionNode.get("exportedPosition").asLong();
+                listPartitionInfo.add(partitionInfo);
+            }
+
+            logger.info("Execute [{}] broker {} found {} partition", url + "/actuator/backups", brokerId, listPartitionInfo.size());
+
+            return listPartitionInfo;
+        } catch (Exception e) {
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No Connection to Zeebe",
+                    "Error url[" + url + "] : " + e.getMessage());
+
+        }
+    }
+
     /* ******************************************************************** */
     /*                                                                      */
     /*  getInformation                                                      */
@@ -361,7 +415,22 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         public int clusterSize;
         public int partitionsCount;
         public int replicationFactor;
+        public String camundaVersion;
+
+        public Map<String, Object> toMap() {
+            ObjectMapper mapper = new ObjectMapper();
+            return mapper.convertValue(this, Map.class);
+        }
     }
 
+    public class PartitionInfo {
+        public int brokerId;
+        public int partitionId;
+        public String role;
+        public Long processedPosition;
+        public Long processedPositionInSnapshot;
+        public Long exportedPosition;
+
+    }
 
 }

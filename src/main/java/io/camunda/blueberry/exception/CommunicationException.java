@@ -11,12 +11,6 @@ public class CommunicationException extends OperationException {
     public static CommunicationException getInstanceFromComponent(CamundaApplicationInt.COMPONENT component, Exception e) {
         OperationException.BLUEBERRYERRORCODE blueberryErrorCode;
         switch (component) {
-            case TASKLIST:
-                blueberryErrorCode = BLUEBERRYERRORCODE.NO_TASKLIST_CONNECTION;
-                break;
-            case OPERATE:
-                blueberryErrorCode = BLUEBERRYERRORCODE.NO_OPERATE_CONNECTION;
-                break;
             case ZEEBE:
                 blueberryErrorCode = BLUEBERRYERRORCODE.NO_ZEEBE_CONNECTION;
                 break;

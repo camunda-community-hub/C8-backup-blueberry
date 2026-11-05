@@ -12,8 +12,6 @@ import java.util.List;
  */
 public class BackupJob {
 
-    private final OperateConnect operateConnect;
-    private final TaskListConnect taskListConnect;
     private final OptimizeConnect optimizeConnect;
     private final ZeebeConnect zeebeConnect;
     private final ElasticSearchConnect elasticSearchConnect;
@@ -22,10 +20,8 @@ public class BackupJob {
     private JOBSTATUS jobStatus = JOBSTATUS.PLANNED;
     private long backupId;
 
-    protected BackupJob(OperateConnect operateConnect, TaskListConnect taskListConnect, OptimizeConnect optimizeConnect,
+    protected BackupJob(OptimizeConnect optimizeConnect,
                         ZeebeConnect zeebeConnect, ElasticSearchConnect elasticSearchConnect, OperationLog operationLog) {
-        this.operateConnect = operateConnect;
-        this.taskListConnect = taskListConnect;
         this.optimizeConnect = optimizeConnect;
         this.zeebeConnect = zeebeConnect;
         this.elasticSearchConnect = elasticSearchConnect;
@@ -54,8 +50,8 @@ public class BackupJob {
         this.backupId = backupId; // calculate a new backup
 
 
-        // Keep only applications existing in the cluster
-        List<CamundaApplicationInt> listApplications = List.of(operateConnect, taskListConnect, optimizeConnect)
+        // Keep only applications existing in the cluster. Operate and Tasklist are backed up with Zeebe (RDBMS) since 8.10
+        List<CamundaApplicationInt> listApplications = List.<CamundaApplicationInt>of(optimizeConnect)
                 .stream()
                 .filter(CamundaApplicationInt::exist)
                 .toList();
@@ -82,7 +78,7 @@ public class BackupJob {
             }
         }
 
-        // Wait end of backup Operate, TaskList, Optimize, Zeebe
+        // Wait end of backup Optimize, Zeebe
         for (CamundaApplicationInt application : listActivesApplication) {
             application.waitBackup(backupId, operationLog);
         }
@@ -91,17 +87,21 @@ public class BackupJob {
         operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBE, 4, "Pause Zeebe");
         zeebeConnect.pauseExporting(operationLog);
 
-        // backup Zeebe record
-        operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBERECORD, 5, "Backup Zeebe Elasticsearch");
-        BackupComponentInt.BackupOperation backupOperation = elasticSearchConnect.backup(backupId, operationLog);
-        if (!backupOperation.isOk()) {
-            this.jobStatus = JOBSTATUS.FAILED;
-            throw new BackupException(CamundaApplicationInt.COMPONENT.ZEEBERECORD,
-                    400,
-                    backupOperation.title,
-                    backupOperation.message, backupId);
+        // backup Zeebe record, only when blueberry.elasticsearch.enabled is true
+        if (elasticSearchConnect.isActive()) {
+            operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBERECORD, 5, "Backup Zeebe Elasticsearch");
+            BackupComponentInt.BackupOperation backupOperation = elasticSearchConnect.backup(backupId, operationLog);
+            if (!backupOperation.isOk()) {
+                this.jobStatus = JOBSTATUS.FAILED;
+                throw new BackupException(CamundaApplicationInt.COMPONENT.ZEEBERECORD,
+                        400,
+                        backupOperation.title,
+                        backupOperation.message, backupId);
+            }
+            elasticSearchConnect.waitBackup(backupId, operationLog);
+        } else {
+            operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBERECORD, 5, "Elasticsearch backup disabled (blueberry.elasticsearch.enabled=false), skip it");
         }
-        elasticSearchConnect.waitBackup(backupId, operationLog);
 
         // backup Zeebe
         operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBE, 6, "Backup Zeebe");

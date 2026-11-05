@@ -20,8 +20,7 @@ import java.util.Map;
 @Component
 
 public class AccessParameterValue {
-    private final Map<String, String> dictionary = Map.of("operateRepository", "CAMUNDA_OPERATE_BACKUP_REPOSITORY_NAME",
-            "tasklistRepository", "CAMUNDA_TASKLIST_BACKUP_REPOSITORY_NAME",
+    private final Map<String, String> dictionary = Map.of(
             "optimizeRepository", "CAMUNDA_OPTIMIZE_BACKUP_REPOSITORY_NAME",
             "zeebeRepository", "",
             "container.containerType", "ZEEBE_BROKER_DATA_BACKUP_STORE");

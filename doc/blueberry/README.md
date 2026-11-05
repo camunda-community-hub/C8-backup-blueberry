@@ -190,8 +190,6 @@ The configuration is available in the application.yaml, and thanks to SpringBoot
 | Parameter                                                                | Description                                                                   | Default value                      |
 |--------------------------------------------------------------------------|-------------------------------------------------------------------------------|------------------------------------|
 | blueberry.optimizeActuatorUrl                                            | Url to access Optimize                                                        | http://camunda-optimize:9600       |
-| blueberry.operateActuatorUrl                                             | Url to access Operate                                                         | http://camunda-operate:9600        |    
-| blueberry.tasklistActuatorUrl                                            | Url to access tasklist                                                        | http://camunda-tasklist:9600       |   
 | blueberry.zeebeActuatorUrl                                               | Url to access Zeebe                                                           | http://camunda-zeebe-gateway:9600  | 
 | blueberry.elasticsearchurl                                               | Url to access Elasticsearch                                                   | http://camunda-elasticsearch:9200  |
 | ** This information are temporary. They must come from the pod itself ** |                                                                               |                                    | 

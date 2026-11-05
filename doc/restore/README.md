@@ -75,39 +75,15 @@ To run a restore, change the value.yaml to turn `ZEEBE_RESTORE` to true and run 
 Do not forget to turn off `ZEEBE_RESTORE` to false.
 
 
-## Restore
-
-### BackupID
-
-The value.yaml must be updated with the backupId
-
-1.1 Update the backupID in the value.yaml
-
-````
-zeebe:
-   enabled: true
-   env:
-   # Environment variables to overwrite the Zeebe startup behavior
-   - name: ZEEBE_RESTORE
-     value: "true"
-   - name: ZEEBE_RESTORE_FROM_BACKUP_ID
-     value: "$BACKUP_ID" # Change the $BACKUP_ID to your actual value             
-````
-
-> If you are under 8.6 and defined a initcontainer, then update the backupID in the initcontainer too
- 
-1.2 Execute the change
-
-Run helm upgrade to update the value
-
-The command may change according the way you created the cluster
+# Restore
 
 
-## 1? Get the configuration
+
+## 1. Get the configuration
 
 > Attention: what is important is the values when the backup was created. Assuming values does not change.
 
-2.1 Run a get pods to inspect the current situation
+1.1 Run a get pods to inspect the current situation
 
 ```shell
 kubectl get pods
@@ -135,16 +111,18 @@ And check how many instances are on each component.
 | TaskList     |                   1 |
 
 
-2.2 Check if all repositories exist in Elasticsearch. This configuration must be executed if you start from an empty database.
+1.2 Check if all repositories exist in Elasticsearch. This configuration must be executed if you start from an empty database.
 
 ```shell
 curl -X GET "http://localhost:9200/_snapshot/_all?pretty"
 ```
 
-### 3. scale down components
-The idea is to stop all components but keep the PCV.
+### 2. scale down components
+The idea is to stop all components but keep ElasticSearch.
 
-3.1 Execute these commands:
+2.1 Execute these commands:
+
+You can scale down the components via these commands
 
 ```shell
 kubectl scale sts/camunda-zeebe --replicas=0
@@ -154,7 +132,22 @@ kubectl scale deploy/camunda-tasklist --replicas=0
 kubectl scale deploy/camunda-optimize --replicas=0
 ```
 
-3.2 Only Elasticsearch is up and running now.
+Or in the Helm chart, disable each component
+
+```yaml
+zeebe:
+  enabled: false
+operate:
+  enabled: false
+tasklist:
+  enabled: false
+optimize:
+  enabled: false
+
+
+```
+
+2.2 Only Elasticsearch is up and running now.
 
 ```shell
 kubectl get pods
@@ -166,34 +159,34 @@ camunda-elasticsearch-master-2          1/1     Running   0          3m19s
 ```
 
 
-## 4. Delete all indexes in Elastic search
+## 3. Delete all indexes in Elastic search
 When Operate, Tasklist, and Optimize start, they create indexes. It must be purged.
 
 In the k8 folder, an `es-delete-all-indices.yaml` file is present. This Kubernetes file creates a pod that executes this deletion.
 
 The script is present under `doc/restore/k8`, so if needed, do a `cd` in that folder.
 
-4.1 Purge
+3.1 Purge
 
 ```shell
 kubectl apply -f k8/es-delete-all-indices.yaml
 ```
 When the deletion is performed, the pod will stop and move to the state "Completed"
 
-4.2 Wait for the status:
+3.2 Wait for the status:
 
 ```shell
 Kubernetes get pods
 es-delete-all-indices-job-bs2h9   0/1     Completed   0          18s
 ```
 
-4.3 Delete the deletion pod
+3.3 Delete the deletion pod
 
 ```shell
 kubectl delete -f es-delete-all-indices.yaml
 ```
 
-4.4 Run the command to verify that all indexes are deleted
+3.4 Run the command to verify that all indexes are deleted
 
 ```shell
 curl -X GET "http://localhost:9200/_cat/indices?v"
@@ -201,9 +194,9 @@ health status index uuid pri rep docs.count docs.deleted store.size pri.store.si
 ```
 The list must be empty.
 
-## 5. Restore Elasticsearch backup
+## 4. Restore Elasticsearch backup
 
-5.1 Create the secret with the correct ID
+4.1 Create the secret with the correct ID
 
 ```shell
 kubectl create secret generic backup-timeid --from-literal=backupTimeId=$BACKUP_ID 
@@ -219,29 +212,32 @@ Check the es-snapshoot-restore.yaml file
 
 ```
 
-5.2 Run the pod; the script is present in `doc/restore/k8`
+4.2 Run the pod; the script is present in `doc/restore/k8`
 
 ```shell
 kubectl apply -f es-snapshot-restore.yaml
 ```
 
-5.3 Monitor the execution. At the end, the pod status changed to `Completed`.
+4.3 Monitor the execution. At the end, the pod status changed to `Completed`.
 
 ```shell
 kubernetes get pods
 es-snapshot-restore-job-pdvzz   0/1     Completed   0          18s
 ```
 
-5.4 Remove the restore pod
+4.4 Remove the restore pod
 
 ```shell
 kubectl delete -f es-snapshot-restore.yaml
 ```
 
-5.5 Check indexes are restored 
+4.5 Check indexes are restored 
 
 ```shell
 curl -X GET "http://localhost:9200/_cat/indices?v"
+```
+The result is
+````
 health status index                                     uuid                   pri rep docs.count docs.deleted store.size pri.store.size dataset.size
 green  open   operate-message-8.5.0_                    kGn9TkwRRqGlRaoW1anvaQ   1   0          0            0       249b           249b         249b
 green  open   operate-batch-operation-1.0.0_            QimDEIwKSwmUYqD8Bc1KRw   1   0          0            0       249b           249b         249b
@@ -264,7 +260,7 @@ green  open   operate-import-position-8.3.0_            9FgKNWwcQ6CleKdCQcSIeg  
 green  open   operate-incident-8.3.1_                   omR5v_KXRkGWagXYBKYkdw   1   0          0            0       249b           249b         249b
 green  open   operate-decision-requirements-8.3.0_      21FcaK25TJuzpHrqk5aoNg   1   0          0            0       249b           249b         249b
 green  open   operate-process-8.3.0_                    8hFENmo0TOCbtHWUweN-AA   1   0          2            2    181.2kb        181.2kb      181.2kb
-```
+````
 
 
 > Note: in the yaml file, the list of repositories is given
@@ -274,6 +270,41 @@ green  open   operate-process-8.3.0_                    8hFENmo0TOCbtHWUweN-AA  
 > ```
 > This list may be adapted according to the repositories created in Elasticsearch. The current values are those created in the backup procedure.
 
+## 5. BackupID
+
+The value.yaml must be updated with the backupId
+
+1.1 Clean the PVC
+
+If you **don't** used the initcontainer, you don't need to clean the PVC
+
+Check the official documentation:
+https://docs.camunda.io/docs/8.5/self-managed/operational-guides/backup-restore/restore/#restore-zeebe-cluster
+
+
+
+1.2 Update the backupID in the value.yaml
+
+Update ZEEBE_RESTORE to true, give the backup id and then enabled zeebe to true
+
+````
+zeebe:
+   enabled: true
+   env:
+   # Environment variables to overwrite the Zeebe startup behavior
+   - name: ZEEBE_RESTORE
+     value: "true"
+   - name: ZEEBE_RESTORE_FROM_BACKUP_ID
+     value: "$BACKUP_ID" # Change the $BACKUP_ID to your actual value             
+````
+
+> If you are under 8.6 and defined a initcontainer, then update the backupID in the initcontainer too
+
+1.3 Execute the change
+
+Run helm upgrade to update the value
+
+The command may change according to the way you created the cluster
 
 
 ## 6. Restore Zeebe 
@@ -284,9 +315,25 @@ green  open   operate-process-8.3.0_                    8hFENmo0TOCbtHWUweN-AA  
 kubectl scale sts/camunda-zeebe --replicas=<ClusterSize>
 ````
 
-### 7. Scale back the application
+## 7. Disable ZEEBE_RESULT
 
-7.1 Uses the value saved during the exploration to restart all components with the correct value.
+8.1 update the value.yaml
+
+````
+zeebe:
+   enabled: true
+   env:
+   # Environment variables to overwrite the Zeebe startup behavior
+   - name: ZEEBE_RESTORE
+     value: "false"
+````
+
+8.2 Restart the system
+
+
+## 8. Scale back the application
+
+8.1 Uses the value saved during the exploration to restart all components with the correct value.
 
 ```shell
 kubectl scale deploy/camunda-zeebe-gateway --replicas=1
