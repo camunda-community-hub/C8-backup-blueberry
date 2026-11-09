@@ -1,9 +1,13 @@
 blueberry:
   optimizeActuatorUrl: http://camunda-optimize:9600
-  zeebeActuatorUrl: http://localhost:9600
-  elasticsearchurl: http://localhost:9200
+  operateActuatorUrl: http://camunda-operate:9600
+  tasklistActuatorUrl: http://camunda-tasklist:9600
+  zeebeActuatorUrl: http://camunda-zeebe:9600
+  elasticsearchurl: http://camunda-elasticsearch:9200
 
   # This information is temporary. They must come from the pod itself
+  operateRepository: operaterepository
+  tasklistRepository: tasklistrepository
   optimizeRepository : optimizerepository
   zeebeRepository: zeeberecordrepository
 
@@ -13,12 +17,10 @@ blueberry:
     certificate-authority-data: ""
     name: ""
 
-  optimize:
-    enabled: false
-
   # When repository need to be created, then a base path is used. All based path used
   elasticsearch:
-    enabled: true
+    operateContainerBasePath: /operate
+    tasklistContainerBasePath: /tasklist
     optimizeContainerBasePath: /optimize
     zeebeRecordContainerBasePath: /zeeberecord
     # ZeebeRecord need a backup. Here is the name of the backup to be created
@@ -27,14 +29,14 @@ blueberry:
 
     # Define the container used by Zeebe and by ElasticSearch
   container:
-    containerType: gcs
+    containerType: azure
     azure:
       containerName: "YourAzureContainerName"
     s3:
       bucketName: "YourS3Bucket"
       region: "us-east-2"
     gcs:
-      bucketName: "pym-pc8backup-20250411"
+      bucketName: "YourS3Bucket"
       basePath: "zeebecontainer"
       region: "us-east-2"
 
@@ -46,24 +48,25 @@ server:
 camunda:
   client:
     mode: self-managed
-    auth:
-      method: basic
-      username: "demo"
-      password: "demo"
+    zeebe:
+      enabled: false
+      grpcAddress: http://camunda-zeebe-gateway:26500
+      preferRestOverGrpc: false
+
+
+  operate:
+    enabled: false
 
 
 logging.level.root: INFO
 
 
-
+# return message with BAD_REQUEST to the client
+server.error.include-message: always
 
 # Spring Boot Configuration
 spring.application.name: Blueberry
 
 spring:
-  # Default database: H2 file based, in ./data (no external database needed). Override with SPRING_DATASOURCE_URL
-  datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/blueberry;AUTO_SERVER=TRUE}
-    username: ${SPRING_DATASOURCE_USERNAME:sa}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
-    driver-class-name: org.h2.Driver
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration

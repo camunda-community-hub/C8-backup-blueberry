@@ -26,6 +26,7 @@
         <!-- <version.zeebe-client>8.5.5</version.zeebe-client> -->
         <!--Version 8.3.1-->
 
+        <version.operate-client>8.6.2</version.operate-client>
 
         <!-- 2.7.4 -->
         <!-- According https://github.com/camunda-community-hub/spring-zeebe/blob/main/pom.xml -->

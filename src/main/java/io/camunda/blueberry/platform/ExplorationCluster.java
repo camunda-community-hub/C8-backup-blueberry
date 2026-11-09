@@ -5,6 +5,7 @@ import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.platform.rule.Rule;
+import io.camunda.blueberry.platform.rule.RuleOperateRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,7 @@ public class ExplorationCluster {
     private final KubernetesConnect kubernetesConnect;
     private final BlueberryConfig blueberryConfig;
     private final PlatformManager platformManager;
+    private final RuleOperateRepository ruleOperateRepository;
     private final ZeebeConnect zeebeConnect;
     /* ******************************************************************** */
     /*                                                                      */
@@ -60,10 +62,12 @@ public class ExplorationCluster {
     public ExplorationCluster(KubernetesConnect kubernetesConnect,
                               BlueberryConfig blueberryConfig,
                               PlatformManager platformManager,
+                              RuleOperateRepository ruleOperateRepository,
                               ZeebeConnect zeebeConnect) {
         this.kubernetesConnect = kubernetesConnect;
         this.blueberryConfig = blueberryConfig;
         this.platformManager = platformManager;
+        this.ruleOperateRepository = ruleOperateRepository;
         this.zeebeConnect = zeebeConnect;
     }
 
@@ -158,7 +162,7 @@ public class ExplorationCluster {
                 // is this component is part of the cluster?
 
                 // Yes, then get the list
-                // repositoryPerComponent.put(CamundaApplicationInt.COMPONENT.OPTIMIZE, kubernetesConnect.getRepositoryNameV2(CamundaApplicationInt.COMPONENT.OPTIMIZE, namespace));
+                // repositoryPerComponent.put(CamundaApplicationInt.COMPONENT.OPERATE, kubernetesConnect.getRepositoryNameV2(CamundaApplicationInt.COMPONENT.OPERATE, namespace));
             } catch (Exception e) {
                 logger.error("Can't get result per component {}", e.getMessage());
             }

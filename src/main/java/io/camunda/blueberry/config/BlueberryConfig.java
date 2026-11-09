@@ -16,30 +16,17 @@ public class BlueberryConfig {
     @Value("${blueberry.optimizeActuatorUrl:@null}")
     private String optimizeActuatorUrl;
 
+    @Value("${blueberry.operateActuatorUrl:@null}")
+    private String operateActuatorUrl;
+
+    @Value("${blueberry.tasklistActuatorUrl:@null}")
+    private String tasklistActuatorUrl;
+
     @Value("${blueberry.zeebeActuatorUrl:http://localhost:9600}")
     private String zeebeActuatorUrl;
 
-    /**
-     * The url contains a placeholder {BROKERID}, for example "http://camunda-zeebe-{{BROKERID}:9600" or "http://camunda-zeebe:960{{BROKERID}" to use portfoward
-     */
-    @Value("${blueberry.zeebeActuatorPodUrl:http://localhost:9600}")
-    private String zeebeActuatorPodUrl;
-
-
     @Value("${blueberry.elasticsearchurl:http://localhost:9200}")
     private String elasticsearchUrl;
-
-    /**
-     * true: the zeebe-record indices are backed up in Elasticsearch (ZEEBERECORD component). false: ignored
-     */
-    @Value("${blueberry.elasticsearch.enabled:false}")
-    private boolean elasticsearchEnabled;
-
-    /**
-     * false: Optimize is not part of the cluster, it is ignored (no connection, no backup, no rule)
-     */
-    @Value("${blueberry.optimize.enabled:true}")
-    private boolean optimizeEnabled;
 
     @Value("${blueberry.namespace:camunda}")
     private String namespace;
@@ -52,6 +39,12 @@ public class BlueberryConfig {
     /**
      * Repository in Elastic search can be created to backup indexes
      */
+    @Value("${blueberry.elasticsearch.operateContainerBasePath:operate}")
+    private String operateContainerBasePath;
+
+    @Value("${blueberry.elasticsearch.tasklistContainerBasePath:tasklist}")
+    private String tasklistContainerBasePath;
+
     @Value("${blueberry.elasticsearch.optimizeContainerBasePath:optimize}")
     private String optimizeContainerBasePath;
 
@@ -64,6 +57,12 @@ public class BlueberryConfig {
     /**
      * These values are temporary. KubernetesConnect should get that values directly from pôds
      */
+    @Value("${blueberry.operateRepository}")
+    private String operateRepository;
+
+    @Value("${blueberry.tasklistRepository}")
+    private String tasklistRepository;
+
     @Value("${blueberry.optimizeRepository}")
     private String optimizeRepository;
 
@@ -102,30 +101,20 @@ public class BlueberryConfig {
         return optimizeActuatorUrl;
     }
 
+    public String getOperateActuatorUrl() {
+        return operateActuatorUrl;
+    }
+
+    public String getTasklistActuatorUrl() {
+        return tasklistActuatorUrl;
+    }
+
     public String getZeebeActuatorUrl() {
         return zeebeActuatorUrl;
     }
 
-    public String getZeebeActuatorPodUrl() {
-        return zeebeActuatorPodUrl;
-    }
-
-    public String getZeebeBrokerActuatorUrl(long brokerId) {
-        String actuatorUrl = getZeebeActuatorPodUrl();
-        // value is something like "http://camunda-zeebe-{BROKERID}:9600" or "http://camunda-zeebe:960{BROKERID}"
-        return actuatorUrl.replaceAll("\\{BROKERID\\}", String.valueOf(brokerId));
-    }
-
     public String getElasticsearchUrl() {
         return elasticsearchUrl;
-    }
-
-    public boolean isElasticsearchEnabled() {
-        return elasticsearchEnabled;
-    }
-
-    public boolean isOptimizeEnabled() {
-        return optimizeEnabled;
     }
 
     public String getNamespace() {
@@ -144,6 +133,10 @@ public class BlueberryConfig {
         return containerType;
     }
 
+    public String getOperateContainerBasePath() {
+        return operateContainerBasePath;
+    }
+
     public String getZeebeRecordRepository() {
         return zeebeRecordRepository;
     }
@@ -152,12 +145,24 @@ public class BlueberryConfig {
         return optimizeContainerBasePath;
     }
 
+    public String getTasklistContainerBasePath() {
+        return tasklistContainerBasePath;
+    }
+
     public String getZeebeRecordContainerBasePath() {
         return zeebeRecordContainerBasePath;
     }
 
     public String getKubeConfig() {
         return kubeConfig == null || kubeConfig.trim().isEmpty() ? null : kubeConfig;
+    }
+
+    public String getOperateRepository() {
+        return operateRepository;
+    }
+
+    public String getTasklistRepository() {
+        return tasklistRepository;
     }
 
     public String getOptimizeRepository() {
