@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -128,7 +129,7 @@ public class WebActuator {
                 // do nothing
             }
             backupStatusResponse = restTemplate.getForEntity(url + "/actuator/backups/" + backupId, ActuatorBackupStatusResponse.class);
-            logger.info("backup status response for url {}: {}, {}", url, backupStatusResponse.getStatusCodeValue(), backupStatusResponse.getBody());
+            logger.info("backup status response for url {}: {}, {}", url, backupStatusResponse.getStatusCode().value(), backupStatusResponse.getBody());
             backupOperation.status = backupStatusResponse.getStatusCode().value();
             if (!written) {
                 for (int i = 0; i < backupStatusResponse.getBody().getDetails().size(); i++) {
@@ -156,7 +157,7 @@ public class WebActuator {
         try {
 
             ResponseEntity<ActuatorBackupStatusResponse[]> backupListResponse = restTemplate.getForEntity(url, ActuatorBackupStatusResponse[].class);
-            logger.info("backup {} status response for url {}: {}, {}", component.name(), url, backupListResponse.getStatusCodeValue(), backupListResponse.getBody());
+            logger.info("backup {} status response for url {}: {}, {}", component.name(), url, backupListResponse.getStatusCode().value(), backupListResponse.getBody());
             if (!backupListResponse.getStatusCode().is2xxSuccessful())
                 throw new OperationException(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, backupListResponse.getStatusCode().value(), "Can't access the Actuator", "Can't access the Actuator");
 
@@ -179,7 +180,8 @@ public class WebActuator {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 
                             ZonedDateTime zonedDateTime = ZonedDateTime.parse(timestamp, formatter);
-                            backupInfo.backupTime = zonedDateTime.toLocalDateTime();
+                            // UTC: the API subtracts the timezone offset of the user (see DateOperation)
+                            backupInfo.backupTime = zonedDateTime.withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
 
                         }
                         return backupInfo;

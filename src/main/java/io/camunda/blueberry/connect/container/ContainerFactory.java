@@ -13,7 +13,7 @@ public class ContainerFactory {
 
     public Container getContainerFromType(String containerType) {
         return containers.stream()
-                .filter(container -> containerType.equals(container.getType()))
+                .filter(container -> containerType != null && containerType.equalsIgnoreCase(container.getType()))
                 .findFirst()
                 .orElse(null);
 

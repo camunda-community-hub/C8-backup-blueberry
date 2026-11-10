@@ -65,7 +65,7 @@ camunda:
   client:
     mode: selfmanaged
     zeebe:
-      enabled: false
+      enabled: true
       gatewayUrl: http://localhost:26500
       grpc-address: http://localhost:26500
 
@@ -97,5 +97,8 @@ server.error.include-message: always
 spring.application.name: Blueberry
 
 spring:
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/blueberry;AUTO_SERVER=TRUE}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.h2.Driver

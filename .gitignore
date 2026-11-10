@@ -1,0 +1,6 @@
+/target/
+/src/main/frontend/node_modules/
+/src/main/frontend/build/
+.idea/
+.DS_Store
+.vscode/

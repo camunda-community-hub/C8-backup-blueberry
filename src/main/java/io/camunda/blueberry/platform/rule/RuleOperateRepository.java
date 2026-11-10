@@ -92,6 +92,8 @@ public class RuleOperateRepository implements Rule {
         ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Operate /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
 
         Object operateRepository = resultParameter.parameters.get(OPERATE_REPOSITORY);
+        ruleInfo.addActuatorEnvInfo("Operate", blueberryConfig.getOperateActuatorUrl() + "/actuator/env",
+                resultParameter, operateRepository);
 
         if (operateRepository == null) {
             ruleInfo.setStatus(RuleStatus.FAILED);
@@ -107,9 +109,9 @@ public class RuleOperateRepository implements Rule {
             // now check if the repository exists in Elastic search
             OperationResult operationResult = elasticSearchConnect.existRepository(operateRepository.toString());
             accessElasticsearchRepository = operationResult.resultBoolean;
-            ruleInfo.addVerificationsButWillBeFixed("Check Elasticsearch repository [" + operateRepository + "] :"
+            ruleInfo.addVerifications("Check Elasticsearch repository [" + operateRepository + "] :"
                             + operationResult.details,
-                    accessElasticsearchRepository ? RuleStatus.CORRECT : RuleStatus.FAILED,
+                    accessElasticsearchRepository ? RuleStatus.CORRECT : execute? RuleStatus.FAILEDBUTWILLBEFIXED: RuleStatus.FAILED,
                     operationResult.command);
 
             // if the repository exists, then we stop the rule execution here
@@ -131,14 +133,14 @@ public class RuleOperateRepository implements Rule {
                     blueberryConfig.getZeebeContainerType(),
                     blueberryConfig.getOperateContainerBasePath());
             if (operationResult.success) {
-                ruleInfo.addDetails("Repository is created in ElasticSearch");
+                ruleInfo.addActivity("Repository is created in ElasticSearch",RuleStatus.CORRECT, operationResult.command);
             } else {
                 ruleInfo.addError("Error when creating the repository in ElasticSearch :" + operationResult.details);
                 ruleInfo.setStatus(RuleStatus.FAILED);
             }
             ruleInfo.addVerifications("Check Elasticsearch repository [" + operateRepository
                             + "] ContainerType[" + blueberryConfig.getZeebeContainerType()
-                            + "] ContainerName[" + blueberryConfig.getAzureContainerName()
+                            + "] ContainerName[" + blueberryConfig.getContainerName()
                             + "] basePath[" + blueberryConfig.getOperateContainerBasePath() + "]",
                     operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);

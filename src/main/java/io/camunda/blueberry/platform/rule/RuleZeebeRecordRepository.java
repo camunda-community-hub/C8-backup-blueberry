@@ -71,9 +71,9 @@ public class RuleZeebeRecordRepository implements Rule {
                 // now check if the repository exists in Elastic search
                 OperationResult operationResult = elasticSearchConnect.existRepository(blueberryConfig.getZeebeRecordRepository());
                 accessElasticsearchRepository = operationResult.resultBoolean;
-                ruleInfo.addVerificationsButWillBeFixed("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository() + "] :"
+                ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository() + "] :"
                                 + operationResult.details,
-                        accessElasticsearchRepository ? RuleStatus.CORRECT : RuleStatus.FAILED,
+                        accessElasticsearchRepository ? RuleStatus.CORRECT :execute? RuleStatus.FAILEDBUTWILLBEFIXED: RuleStatus.FAILED,
                         operationResult.command);
 
                 // if the repository exists, then we stop the rule execution here
@@ -95,15 +95,14 @@ public class RuleZeebeRecordRepository implements Rule {
                         blueberryConfig.getZeebeContainerType(),
                         blueberryConfig.getZeebeRecordContainerBasePath());
                 if (operationResult.success) {
-                    ruleInfo.addDetails("Repository is created in ElasticSearch");
-                    ruleInfo.setStatus(RuleStatus.CORRECT);
+                    ruleInfo.addActivity("Repository is created in ElasticSearch", RuleStatus.CORRECT, operationResult.command);
                 } else {
                     ruleInfo.addError("Error when creating the repository in ElasticSearch :" + operationResult.details);
                     ruleInfo.setStatus(RuleStatus.FAILED);
                 }
                 ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository()
                                 + "] ContainerType[" + blueberryConfig.getZeebeContainerType()
-                                + "] ContainerName[" + blueberryConfig.getAzureContainerName()
+                                + "] ContainerName[" + blueberryConfig.getContainerName()
                                 + "] basePath[" + blueberryConfig.getZeebeRecordContainerBasePath() + "]",
                         operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                         operationResult.command);
