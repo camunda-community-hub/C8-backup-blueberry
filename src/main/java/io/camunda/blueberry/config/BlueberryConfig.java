@@ -25,8 +25,27 @@ public class BlueberryConfig {
     @Value("${blueberry.zeebeActuatorUrl:http://localhost:9600}")
     private String zeebeActuatorUrl;
 
+    /**
+     * The url contains a placeholder {BROKERID}, for example "http://camunda-zeebe-{{BROKERID}:9600" or "http://camunda-zeebe:960{{BROKERID}" to use portfoward
+     */
+    @Value("${blueberry.zeebeActuatorPodUrl:http://localhost:9600}")
+    private String zeebeActuatorPodUrl;
+
+
     @Value("${blueberry.elasticsearchurl:http://localhost:9200}")
     private String elasticsearchUrl;
+
+    /**
+     * true: the zeebe-record indices are backed up in Elasticsearch (ZEEBERECORD component). false: ignored
+     */
+    @Value("${blueberry.elasticsearch.enabled:false}")
+    private boolean elasticsearchEnabled;
+
+    /**
+     * false: Optimize is not part of the cluster, it is ignored (no connection, no backup, no rule)
+     */
+    @Value("${blueberry.optimize.enabled:true}")
+    private boolean optimizeEnabled;
 
     @Value("${blueberry.namespace:camunda}")
     private String namespace;
@@ -113,8 +132,26 @@ public class BlueberryConfig {
         return zeebeActuatorUrl;
     }
 
+    public String getZeebeActuatorPodUrl() {
+        return zeebeActuatorPodUrl;
+    }
+
+    public String getZeebeBrokerActuatorUrl(long brokerId) {
+        String actuatorUrl = getZeebeActuatorPodUrl();
+        // value is something like "http://camunda-zeebe-{BROKERID}:9600" or "http://camunda-zeebe:960{BROKERID}"
+        return actuatorUrl.replaceAll("\\{BROKERID\\}", String.valueOf(brokerId));
+    }
+
     public String getElasticsearchUrl() {
         return elasticsearchUrl;
+    }
+
+    public boolean isElasticsearchEnabled() {
+        return elasticsearchEnabled;
+    }
+
+    public boolean isOptimizeEnabled() {
+        return optimizeEnabled;
     }
 
     public String getNamespace() {
@@ -133,20 +170,20 @@ public class BlueberryConfig {
         return containerType;
     }
 
-    public String getOperateContainerBasePath() {
-        return operateContainerBasePath;
-    }
-
     public String getZeebeRecordRepository() {
         return zeebeRecordRepository;
     }
 
-    public String getOptimizeContainerBasePath() {
-        return optimizeContainerBasePath;
+    public String getOperateContainerBasePath() {
+        return operateContainerBasePath;
     }
 
     public String getTasklistContainerBasePath() {
         return tasklistContainerBasePath;
+    }
+
+    public String getOptimizeContainerBasePath() {
+        return optimizeContainerBasePath;
     }
 
     public String getZeebeRecordContainerBasePath() {
