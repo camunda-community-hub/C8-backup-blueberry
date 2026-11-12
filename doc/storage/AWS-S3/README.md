@@ -11,12 +11,14 @@ Check the [AWSPrerequisite.md](AWSPrerequisite.md)
 
 Zeebe is connected directly to the Azure bucket. It will save the backup at the root folder in the bucket.
 
-![Principle Zeebe](images/PrincipleZeebe.png)
+
+![Principle Zeebe](images/PrincipleZeebeS3.png)
 
 Operate, TaskList, Optimize run the backup on Elastic search. They ask Elastic search to back up the correct index on a repository (this repository is a parameter on Operate).
 The repository is configured in Elasticsearch, pointing to the bucket in Azure. This configuration (create the repository) must be done in advance in Elasticsearch
 
-![Principle Operate](images/PrincipleOperate.png)
+
+![Principal Operate](images/PrincipalOperateS3.png)
 
 # Connection via an account name / account key
 
