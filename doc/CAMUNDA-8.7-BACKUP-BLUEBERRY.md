@@ -273,7 +273,7 @@ For the Configuration page, Camunda components can temporarily expose `env` on t
 
 ### Build (from repo root)
 
-Requires **Java 21+** and **Maven**.
+Requires **Java 25** and **Maven**.
 
 ```bash
 CI=false mvn -DskipTests install
