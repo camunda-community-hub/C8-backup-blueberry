@@ -1,199 +1,180 @@
 package io.camunda.blueberry.connect;
 
-
 import io.camunda.blueberry.config.BlueberryConfig;
+import io.camunda.blueberry.exception.OperationException;
+import io.camunda.blueberry.operation.restoration.RestoreLayout;
+import io.camunda.blueberry.operation.restoration.WorkloadRef;
+import io.fabric8.kubernetes.api.model.Container;
+import io.fabric8.kubernetes.api.model.EnvVar;
+import io.fabric8.kubernetes.api.model.apps.Deployment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Optional;
 
 @Component
 public class KubernetesConnect {
-    private static final boolean NOT_IMPLEMENTED = true;
+
+    private static final List<String> OPERATE_REPO_ENV = List.of(
+            "CAMUNDA_OPERATE_BACKUP_REPOSITORYNAME",
+            "CAMUNDA_OPERATE_BACKUP_REPOSITORY_NAME");
+    private static final List<String> TASKLIST_REPO_ENV = List.of(
+            "CAMUNDA_TASKLIST_BACKUP_REPOSITORYNAME",
+            "CAMUNDA_TASKLIST_BACKUP_REPOSITORY_NAME");
+    private static final List<String> OPTIMIZE_REPO_ENV = List.of(
+            "CAMUNDA_OPTIMIZE_BACKUP_REPOSITORYNAME",
+            "CAMUNDA_OPTIMIZE_BACKUP_REPOSITORY_NAME",
+            "CAMUNDA_OPTIMIZE_BACKUP_REPOSITORY");
+
+    private final BlueberryConfig blueberryConfig;
+    private final KubernetesClientProvider clientProvider;
+    private final Fabric8KubernetesWorkload kubernetesWorkload;
     Logger logger = LoggerFactory.getLogger(KubernetesConnect.class);
-    BlueberryConfig blueberryConfig;
 
-    KubernetesConnect(BlueberryConfig blueberryConfig) {
+    KubernetesConnect(BlueberryConfig blueberryConfig,
+                      KubernetesClientProvider clientProvider,
+                      Fabric8KubernetesWorkload kubernetesWorkload) {
         this.blueberryConfig = blueberryConfig;
+        this.clientProvider = clientProvider;
+        this.kubernetesWorkload = kubernetesWorkload;
     }
 
-    /**
-     * Connect to the Kubernetes cluster
-     *
-     * @return connection to the application
-     */
     public OperationResult connection() {
-
-
         OperationResult result = new OperationResult();
-
+        result.success = isConnected();
+        result.details = result.success
+                ? "Connected to Kubernetes API"
+                : "Cannot reach Kubernetes API. Set blueberry.kubeConfig or run Blueberry in-cluster.";
         return result;
-
-        /*
-        try {
-           // connectExplicitaly();
-
-            if (blueberryConfig.getKubeConfig() != null) {
-                logger.info("Connection to Kubernetes via KubeConfig[{}]", blueberryConfig.getKubeConfig());
-                Config config = Config.fromKubeconfig(new java.io.File(blueberryConfig.getKubeConfig()));
-                client = new KubernetesClientBuilder().withConfig(config).build();
-            } else {
-                logger.info("Connection to Kubernetes via Default Client");
-                client = new DefaultKubernetesClient();
-            }
-            result.success = true;
-        } catch (Exception e) {
-            logger.error(e.getMessage());
-            result.success = false;
-            result.details = "Can't connect to Kubernetes";
-        }
-        return result;
-         */
     }
-
 
     public boolean isConnected() {
-        return false; /* client != null; */
+        return clientProvider.ping();
     }
 
-    /**
-     * return true tif the component exist in the cluster
-     *
-     * @param component to check
-     * @param nameSpace namespace
-     * @return the result. operationResult.resultBoolean is true if the component exist
-     */
     public OperationResult existComponent(CamundaApplicationInt.COMPONENT component, String nameSpace) {
         OperationResult operationResult = new OperationResult();
-        operationResult.success = true;
-        operationResult.command = "kubectl get pods | grep " + component.toString();
-        operationResult.resultBoolean = true;
-        return operationResult;
-    }
-
-    /**
-     * Explore the component to retrieve the repository. For example, Operate defined a variable CAMUNDA_OPERATE_BACKUP_REPOSITORY_NAME
-     *
-     * @param component component to explore
-     * @param nameSpace namespace
-     * @return the result
-     */
-    public OperationResult getRepositoryName(CamundaApplicationInt.COMPONENT component, String nameSpace) {
-        // Soon: ask the pod informatoin and read it from it
-        OperationResult operationResult = new OperationResult();
-        switch (component) {
-            case OPERATE:
-                operationResult.resultSt = blueberryConfig.getOperateRepository();
-                operationResult.success = true;
-                operationResult.command = "kubectl describe pod operate";
-                break;
-
-            case TASKLIST:
-                operationResult.resultSt = blueberryConfig.getTasklistRepository();
-                operationResult.success = true;
-                operationResult.command = "kubectl describe pod tasklist";
-                break;
-
-            case OPTIMIZE:
-                operationResult.resultSt = blueberryConfig.getOptimizeRepository();
-                operationResult.success = true;
-                operationResult.command = "kubectl describe pod optimize";
-                break;
-
-
-            default:
+        operationResult.command = "kubectl get deploy,sts -n " + nameSpace;
+        try {
+            WorkloadRef workload = workloadFor(component);
+            if (workload == null) {
                 operationResult.success = false;
-                operationResult.details = "Unknown component";
-                break;
+                operationResult.resultBoolean = false;
+                operationResult.details = "No Kubernetes workload mapping for " + component;
+                return operationResult;
+            }
+            boolean exists = kubernetesWorkload.exists(workload);
+            operationResult.success = true;
+            operationResult.resultBoolean = exists;
+            operationResult.details = exists
+                    ? workload.name() + " exists"
+                    : workload.name() + " not found in namespace " + nameSpace;
+            return operationResult;
+        } catch (OperationException e) {
+            operationResult.success = false;
+            operationResult.resultBoolean = false;
+            operationResult.details = e.getMessage();
+            return operationResult;
         }
+    }
+
+    public OperationResult getRepositoryName(CamundaApplicationInt.COMPONENT component, String nameSpace) {
+        OperationResult operationResult = new OperationResult();
+        RestoreLayout layout = RestoreLayout.from(blueberryConfig);
+        String deploymentName = switch (component) {
+            case OPERATE -> layout.operate().name();
+            case TASKLIST -> layout.tasklist().name();
+            case OPTIMIZE -> layout.optimize().name();
+            default -> null;
+        };
+        operationResult.command = deploymentName == null
+                ? "n/a"
+                : "kubectl get deploy " + deploymentName + " -n " + nameSpace + " -o jsonpath={.spec.template.spec.containers[*].env}";
+
+        List<String> envNames = switch (component) {
+            case OPERATE -> OPERATE_REPO_ENV;
+            case TASKLIST -> TASKLIST_REPO_ENV;
+            case OPTIMIZE -> OPTIMIZE_REPO_ENV;
+            default -> List.of();
+        };
+
+        if (deploymentName == null || envNames.isEmpty()) {
+            operationResult.success = false;
+            operationResult.details = "Repository env lookup is not defined for " + component;
+            return operationResult;
+        }
+
+        try {
+            Optional<String> fromCluster = readRepositoryFromDeployment(nameSpace, deploymentName, envNames);
+            if (fromCluster.isPresent()) {
+                operationResult.resultSt = fromCluster.get();
+                operationResult.success = true;
+                operationResult.details = "Read from Deployment " + deploymentName;
+                return operationResult;
+            }
+        } catch (Exception e) {
+            logger.warn("Could not read repository from Deployment {}: {}", deploymentName, e.getMessage());
+        }
+
+        operationResult.resultSt = fallbackRepository(component);
+        operationResult.success = operationResult.resultSt != null && !operationResult.resultSt.isBlank();
+        operationResult.details = operationResult.success
+                ? "Fallback to application.yaml (Deployment env not found)"
+                : "No repository in cluster or config";
         return operationResult;
     }
 
-
-    /**
-     * If the application is deployed in a Pod, then it is deploy in a current namespace. Return this namespace
-     */
     public String getCurrentNamespace() {
-        // TODO
-        return "camunda";
+        return blueberryConfig.getNamespace();
     }
 
+    private Optional<String> readRepositoryFromDeployment(String namespace, String deploymentName, List<String> envNames)
+            throws OperationException {
+        Deployment deployment = clientProvider.client().apps().deployments()
+                .inNamespace(namespace)
+                .withName(deploymentName)
+                .get();
+        if (deployment == null || deployment.getSpec() == null
+                || deployment.getSpec().getTemplate().getSpec() == null) {
+            return Optional.empty();
+        }
+        for (Container container : deployment.getSpec().getTemplate().getSpec().getContainers()) {
+            if (container.getEnv() == null) {
+                continue;
+            }
+            for (EnvVar envVar : container.getEnv()) {
+                if (envVar.getName() == null || envVar.getValue() == null) {
+                    continue;
+                }
+                for (String expected : envNames) {
+                    if (expected.equalsIgnoreCase(envVar.getName())) {
+                        return Optional.of(envVar.getValue());
+                    }
+                }
+            }
+        }
+        return Optional.empty();
+    }
 
-    /**
-     * @param component
-     * @param nameSpace
-     * @return
-     */
-    /**
-     public OperationResult getRepositoryNameV2(CamundaApplicationInt.COMPONENT component, String nameSpace) {
-     OperationResult operationResult = new OperationResult();
-     List<Pod> pods = null;
-     try {
-     pods = getContainerInformation(component.name(), nameSpace);
-     } catch (KubernetesException e) {
+    private String fallbackRepository(CamundaApplicationInt.COMPONENT component) {
+        return switch (component) {
+            case OPERATE -> blueberryConfig.getOperateRepository();
+            case TASKLIST -> blueberryConfig.getTasklistRepository();
+            case OPTIMIZE -> blueberryConfig.getOptimizeRepository();
+            default -> null;
+        };
+    }
 
-     operationResult.success = false;
-     return operationResult;
-     }
-
-     for (Pod pod : pods) {
-     logger.info("Name{}", pod.getMetadata().getName());
-     }
-     return operationResult;
-     }
-     **/
-
-    /* List all pods containing the name <podName> in a given namespace.
-     * @param podName filter pods by the name (contains: a deployment add ID after the name)
-     * @param namespace namespace to search
-     * @return list of pods
-     * @throws KubernetesException
-     */
-
-    /**
-     private List<Pod> getContainerInformation(String podName, String nameSpace) throws KubernetesException {
-
-     try {
-     // Namespace where the pods are running
-
-     // Get all pods in the namespace
-     List<Pod> pods = client.pods().inNamespace(nameSpace).list().getItems();
-
-     // Print pod names
-     for (Pod pod : pods) {
-     logger.info("Pods {}", pod.getMetadata().getName());
-     }
-     return pods;
-     } catch (Exception e) {
-     logger.error(e.getMessage());
-     throw new KubernetesException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Can't list pods", "Pods can't be listed in nameSpace[" + nameSpace + "] " + e.getMessage());
-     }
-     }
-
-     private void connectExplicitaly() {
-     String token = getAuthToken();
-
-     Config config = new ConfigBuilder()
-     .withMasterUrl("https://34.139.199.129")
-     .withOauthToken(token)
-     .build();
-
-     try {
-     client = new KubernetesClientBuilder().withConfig(config).build();
-     System.out.println("Connected to Kubernetes: " + client.getMasterUrl());
-     } catch (Exception e) {
-     e.printStackTrace();
-     }
-     }
-
-     private static String getAuthToken() {
-     try {
-     Process process = new ProcessBuilder("c/atelier/Gcloud/google-cloud-sdk/bin/gcloud", "auth", "print-access-token").start();
-     BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-     return reader.readLine();
-     } catch (Exception e) {
-     throw new RuntimeException("Failed to retrieve token", e);
-     }
-     }
-     **/
+    private WorkloadRef workloadFor(CamundaApplicationInt.COMPONENT component) {
+        RestoreLayout layout = RestoreLayout.from(blueberryConfig);
+        return switch (component) {
+            case OPERATE -> layout.operate();
+            case TASKLIST -> layout.tasklist();
+            case OPTIMIZE -> layout.optimize();
+            case ZEEBE -> layout.zeebe();
+            default -> null;
+        };
+    }
 }

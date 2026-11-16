@@ -12,7 +12,7 @@ import {ArrowRepeat, QuestionCircle, Terminal} from "react-bootstrap-icons";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import RestCallService from "../services/RestCallService";
-import {Alert} from 'react-bootstrap';
+import {Alert, Modal} from 'react-bootstrap';
 import ControllerPage from "../component/ControllerPage";
 
 
@@ -25,8 +25,17 @@ class Configuration extends React.Component {
         this.state = {
             display: {loading: false},
             resultCall: {status: 200, error: "", message: "", component: ""},
-            listChecks: []
+            listChecks: [],
+            openCommands: {},
+            showConfirm: false
         };
+    }
+
+    /* Open or close the section showing the command of a verification */
+    toggleCommand(key) {
+        const openCommands = {...this.state.openCommands};
+        openCommands[key] = !openCommands[key];
+        this.setState({openCommands: openCommands});
     }
 
     componentDidMount() {
@@ -67,15 +76,36 @@ class Configuration extends React.Component {
                         </Button>
                     </div>
                     <div className="col-md-2">
-                        <Button className="btn btn-danger btn-sm"
+                        <Button className="btn btn-primary btn-sm"
                                 onClick={() => {
-                                    this.configure()
+                                    this.setState({showConfirm: true})
                                 }}
                                 disabled={this.state.display.loading}>
                             Configure
                         </Button>
                     </div>
                 </div>
+
+                <Modal show={this.state.showConfirm} onHide={() => this.setState({showConfirm: false})}>
+                    <Modal.Header closeButton>
+                        <Modal.Title>Confirm the configuration</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        <p>This operation will update the system: it creates the missing Elasticsearch repositories
+                            and applies the configuration needed for the backup.</p>
+                        <p>Do you want to continue?</p>
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button kind="secondary" onClick={() => this.setState({showConfirm: false})}>Cancel</Button>
+                        <Button kind="danger"
+                                onClick={() => {
+                                    this.setState({showConfirm: false});
+                                    this.configure();
+                                }}>
+                            Configure
+                        </Button>
+                    </Modal.Footer>
+                </Modal>
                 <div className="row" style={{marginTop: "10px"}}>
                     <table className="table is-hoverable is-fullwidth">
                         <thead>
@@ -88,11 +118,19 @@ class Configuration extends React.Component {
                         <tbody>
                         {this.state.listChecks ? this.state.listChecks.map((content, _index) =>
                             <tr>
-                                <td>{content.name}</td>
+                                <td style={{fontWeight: "bold", fontStyle: "italic", fontSize: "0.8rem"}}>{content.name}</td>
                                 <td>
                                     {this.renderConnectionTag(content.status)}
                                 </td>
-                                <td>{content.details}
+                                <td>
+                                    {/* the actions executed by the rule, if any */}
+                                    {content.actions &&
+                                        <div style={{whiteSpace: "pre-wrap"}}>
+                                            action: {content.actions}
+                                        </div>
+                                    }
+                                    {/* the details, and the verifications */}
+                                    {content.details}
 
                                     {content.errors && (
                                         <Alert variant="danger">
@@ -112,36 +150,82 @@ class Configuration extends React.Component {
                                     </OverlayTrigger>
                                     <table className="w-full border-collapse border border-gray-300">
                                         <thead>
-                                        <tr className="bg-gray-100">
-                                            <th className="border p-2">Action</th>
-                                            <th className="border p-2">Status</th>
+                                        <tr>
+                                            <th className="border p-2" style={{background: "#e0e0e0", color: "#161616", fontWeight: "bold"}}>Steps</th>
+                                            <th className="border p-2" style={{background: "#e0e0e0", color: "#161616", fontWeight: "bold"}}>Status</th>
                                         </tr>
                                         </thead>
                                         <tbody>
                                         {content.verifications.map((verification, index) => (
-                                            <tr key={index} className="border">
-                                                <td className="border p-2">
-                                                    {verification.action}&nbsp;&nbsp;
-                                                    {verification.command &&
-                                                        <OverlayTrigger
-                                                            placement="top"
-                                                            overlay={<Tooltip id="tooltip">{verification.command}</Tooltip>}
-                                                        >
-                                                      <span className="d-inline-block">
-                                                        <Terminal size={20} className="text-muted"/>
-                                                      </span>
-                                                        </OverlayTrigger>
-                                                    }
-                                                </td>
-                                                <td className="border p-2">
-                                                    {this.renderConnectionTag(verification.actionStatus)}
-                                                </td>
-                                            </tr>
+                                            <React.Fragment key={index}>
+                                                <tr className="border">
+                                                    <td className="border p-2">
+                                                        {verification.action}
+                                                        {verification.activity &&
+                                                            <span>activity: <b><i>{verification.activity}</i></b></span>
+                                                        }
+                                                        &nbsp;&nbsp;
+                                                        {verification.command &&
+                                                            <span className="d-inline-block"
+                                                                  role="button"
+                                                                  title="Show / hide the command"
+                                                                  style={{cursor: "pointer"}}
+                                                                  onClick={() => this.toggleCommand(content.name + "-" + index)}>
+                                                                <Terminal size={20}
+                                                                          className={this.state.openCommands[content.name + "-" + index] ? "text-primary" : "text-muted"}/>
+                                                            </span>
+                                                        }
+                                                        {verification.command && this.state.openCommands[content.name + "-" + index] &&
+                                                            <div style={{marginTop: "4px"}}>
+                                                                <div className="text-muted" style={{fontSize: "0.8rem"}}>Command</div>
+                                                                <pre style={{
+                                                                    background: "#f4f4f4",
+                                                                    border: "1px solid #d0d0d0",
+                                                                    borderRadius: "4px",
+                                                                    padding: "10px",
+                                                                    margin: 0,
+                                                                    fontSize: "0.85rem",
+                                                                    whiteSpace: "pre-wrap"
+                                                                }}><code>{verification.command}</code></pre>
+                                                            </div>
+                                                        }
+                                                    </td>
+                                                    <td className="border p-2">
+                                                        {this.renderConnectionTag(verification.actionStatus)}
+                                                    </td>
+                                                </tr>
+                                                {verification.error &&
+                                                    <tr className="border">
+                                                        <td colSpan="2"
+                                                            className={(verification.actionStatus === "INFO" || verification.actionStatus === "CORRECT") ?"border p-2 text-muted" : "border p-2 text-danger"}
+                                                            style={{whiteSpace: "pre-wrap"}}>
+                                                            {verification.error}
+                                                        </td>
+                                                    </tr>
+                                                }
+                                                {verification.configuration &&
+                                                    <tr className="border">
+                                                        <td colSpan="2" className="border p-2">
+                                                            <div className="text-muted" style={{fontSize: "0.8rem"}}>Configuration</div>
+                                                            <pre style={{
+                                                                background: "#f4f4f4",
+                                                                border: "1px solid #d0d0d0",
+                                                                borderRadius: "4px",
+                                                                padding: "10px",
+                                                                margin: 0,
+                                                                fontSize: "0.85rem",
+                                                                whiteSpace: "pre"
+                                                            }}><code>{verification.configuration}</code></pre>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </React.Fragment>
                                         ))}
                                         </tbody>
                                     </table>
                                     <p/>
                                     {/* Documentation Links */}
+                                    {content.urldocumentation && content.urldocumentation.length > 0 &&
                                     <Accordion className="mt-4" defaultActiveKey="0">
                                         <AccordionItem title="Documentation" eventKey="0">
                                             {content.urldocumentation.map((url, index) => (
@@ -152,7 +236,7 @@ class Configuration extends React.Component {
                                                 </p>
                                             ))}
                                         </AccordionItem>
-                                    </Accordion>
+                                    </Accordion>}
                                 </td>
                             </tr>
                         ) : <div/>}
@@ -227,6 +311,9 @@ class Configuration extends React.Component {
 
             case "NOT_CONNECTED":
                 return <Tag type="magenta">Not connected</Tag>
+
+            case "INFO":
+                return <Tag type="cyan">Info</Tag>
 
 
             default:

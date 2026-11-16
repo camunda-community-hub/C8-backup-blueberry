@@ -5,12 +5,12 @@ import java.util.List;
 
 
 public class ActuatorBackupStatusResponse {
-    private int backupId;
+    private long backupId;
     private String state;
     private String failureReason;
     private List<Details> details;
 
-    public int getBackupId() {
+    public long getBackupId() {
         return backupId;
     }
 

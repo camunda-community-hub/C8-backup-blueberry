@@ -5,6 +5,19 @@ blueberry:
   zeebeActuatorUrl: http://camunda-zeebe:9600
   elasticsearchurl: http://camunda-elasticsearch:9200
 
+  namespace: camunda
+  # Path to kubeconfig when Blueberry runs outside the cluster (for restore and K8s exploration).
+  # kubeConfig: /Users/you/.kube/config
+  # kubectl context when ~/.kube/config has several clusters (e.g. GKE + kind). Avoids GKE exec auth for local dev.
+  # kubeContext: kind-camunda-platform-local
+
+  # PwC Camunda 8.7 restore. execution stays false until you intend to delete indices and Zeebe volumes.
+  restore:
+    execution: false
+    helmRelease: camunda87helm
+    podDeleteTimeoutSeconds: 300
+    zeebeRestoreTimeoutSeconds: 1800
+
   # This information is temporary. They must come from the pod itself
   operateRepository: operaterepository
   tasklistRepository: tasklistrepository
@@ -29,14 +42,14 @@ blueberry:
 
     # Define the container used by Zeebe and by ElasticSearch
   container:
-    containerType: azure
+    containerType: gcs
     azure:
       containerName: "YourAzureContainerName"
     s3:
-      bucketName: "YourS3Bucket"
+      bucket: "YourS3Bucket"
       region: "us-east-2"
     gcs:
-      bucketName: "YourS3Bucket"
+      bucket: "pym-pc8backup-20250411"
       basePath: "zeebecontainer"
       region: "us-east-2"
 
@@ -49,7 +62,8 @@ camunda:
   client:
     mode: self-managed
     zeebe:
-      enabled: false
+      # The Camunda 8.7.24+ starter creates the client configuration (ZeebeClientConfigurationImpl) only when enabled
+      enabled: true
       grpcAddress: http://camunda-zeebe-gateway:26500
       preferRestOverGrpc: false
 
@@ -68,5 +82,10 @@ server.error.include-message: always
 spring.application.name: Blueberry
 
 spring:
-  autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+  # Default database: H2 file based, in ./data (no external database needed). Override with SPRING_DATASOURCE_URL.
+  # (Spring Boot 4 moved DataSourceAutoConfiguration: the old exclude is ignored, JPA needs a database)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/blueberry;AUTO_SERVER=TRUE}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.h2.Driver

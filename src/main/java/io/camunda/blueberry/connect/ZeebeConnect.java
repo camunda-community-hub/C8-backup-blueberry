@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,6 +127,19 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         return connection();
     }
 
+    /**
+     * Return the connected Zeebe client, to send commands (deploy a process, start an instance...)
+     *
+     * @throws OperationException if Zeebe is not reachable
+     */
+    public ZeebeClient getConnectedZeebeClient() throws OperationException {
+        if (!activateConnection()) {
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.NO_ZEEBE_CONNECTION,
+                    "No connection to Zeebe", "Connection is not established to Zeebe");
+        }
+        return myZeebeClient;
+    }
+
     public ClusterInformation getClusterInformation() {
         try {
             final Topology topology = myZeebeClient.newTopologyRequest().send().join();
@@ -224,7 +238,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         Map<String, Object> backupBody = Map.of("backupId", backupId);
         ResponseEntity<String> backupResponse = restTemplate.postForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/backups", backupBody, String.class);
 
-        logger.info("Backup status response for url {}: {}, {}", blueberryConfig.getZeebeActuatorUrl(), backupResponse.getStatusCodeValue(), backupResponse.getBody());
+        logger.info("Backup status response for url {}: {}, {}", blueberryConfig.getZeebeActuatorUrl(), backupResponse.getStatusCode().value(), backupResponse.getBody());
         backupOperation.status = backupResponse.getStatusCode().value();
 
         if (backupResponse.getStatusCode().is2xxSuccessful()) {
@@ -279,7 +293,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             backupOperation.status = response.getStatusCode().value();
 
             logger.info("Backup status response for URL {}: {}, {}",
-                    blueberryConfig.getZeebeActuatorUrl(), response.getStatusCodeValue(), response.getBody());
+                    blueberryConfig.getZeebeActuatorUrl(), response.getStatusCode().value(), response.getBody());
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 try {
@@ -324,7 +338,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
 
                         String timestamp = details[0].get("createdAt").asText();
                         LocalDateTime localDateTime = Instant.parse(timestamp)
-                                .atZone(ZoneId.systemDefault()) // Convert to system's time zone
+                                .atZone(ZoneOffset.UTC) // UTC: the API subtracts the timezone offset of the user (see DateOperation)
                                 .toLocalDateTime();
 
                         backupInfo.backupTime = localDateTime;
