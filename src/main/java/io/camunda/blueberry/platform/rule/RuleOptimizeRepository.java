@@ -3,6 +3,7 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.exception.CommunicationException;
 import org.springframework.stereotype.Component;
 

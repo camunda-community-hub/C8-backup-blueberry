@@ -1,7 +1,12 @@
-package io.camunda.blueberry.connect;
+package io.camunda.blueberry.connect.secondary;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.camunda.blueberry.config.BlueberryConfig;
+import io.camunda.blueberry.connect.BackupComponentInt;
+import io.camunda.blueberry.connect.BackupInfo;
+import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.OperationResult;
+import io.camunda.blueberry.connect.ZeebeRestApi;
 import io.camunda.blueberry.connect.container.Container;
 import io.camunda.blueberry.connect.container.ContainerFactory;
 import io.camunda.blueberry.exception.BackupException;
@@ -23,9 +28,13 @@ import java.time.ZoneId;
 import java.util.*;
 
 @Component
-public class ElasticSearchConnect implements BackupComponentInt {
+public class ElasticSearchConnect implements SecondaryStorageInt {
     Logger logger = LoggerFactory.getLogger(ElasticSearchConnect.class);
 
+
+    public String getName() {
+        return "ElasticSearch";
+    }
     BlueberryConfig blueberryConfig;
 
     ContainerFactory containerFactory;
@@ -33,9 +42,12 @@ public class ElasticSearchConnect implements BackupComponentInt {
     @Autowired
     private RestTemplate restTemplate; // Injected instance
 
-    public ElasticSearchConnect(BlueberryConfig blueberryConfig, ContainerFactory containerFactory) {
+    private final ZeebeRestApi zeebeRestApi;
+
+    public ElasticSearchConnect(BlueberryConfig blueberryConfig, ContainerFactory containerFactory, ZeebeRestApi zeebeRestApi) {
         this.blueberryConfig = blueberryConfig;
         this.containerFactory = containerFactory;
+        this.zeebeRestApi = zeebeRestApi;
     }
 
     public OperationResult connection() {
@@ -177,7 +189,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
 
     @Override
     public CamundaApplicationInt.COMPONENT getComponent() {
-        return CamundaApplicationInt.COMPONENT.ZEEBERECORD;
+        return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
     }
 
     /***
@@ -193,20 +205,81 @@ public class ElasticSearchConnect implements BackupComponentInt {
         String zeebeEsRepository = blueberryConfig.getZeebeRecordRepository();
         CamundaApplicationInt.BackupOperation backupOperation = new CamundaApplicationInt.BackupOperation();
 
+        // Procedure of the documentation, steps 2 and 4: the history backup (the indices of Operate and Tasklist),
+        // which must be complete before the snapshot of the Zeebe records (step 6)
+        BackupOperation historyBackup = historyBackup(backupId, operationLog);
+        if (!historyBackup.isOk()) {
+            return historyBackup;
+        }
+
         HttpEntity<?> zeebeEsBackupRequest = new HttpEntity<>(Map.of("indices", "zeebe-record*", "feature_states", List.of("none")));
         String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/" + backupId;
         try {
             ResponseEntity<String> zeebeEsBackupResponse = restTemplate.exchange(urlComplete, HttpMethod.PUT, zeebeEsBackupRequest, String.class);
             backupOperation.status = zeebeEsBackupResponse.getStatusCode().value();
 
-            operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBERECORD, "Start Zeebe ES Backup on [" + zeebeEsRepository + "] response: " + zeebeEsBackupResponse.getStatusCode().value() + " [" + zeebeEsBackupResponse.getBody() + "]");
+            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Start Zeebe ES Backup on [" + zeebeEsRepository + "] response: " + zeebeEsBackupResponse.getStatusCode().value() + " [" + zeebeEsBackupResponse.getBody() + "]");
         } catch (Exception e) {
             logger.error("Exception in esBackup", e);
 
             backupOperation.title = e.getMessage();
-            backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.ZEEBERECORD + "] Url[" + urlComplete + "]" + e.getMessage();
-            operationLog.error(CamundaApplicationInt.COMPONENT.ZEEBERECORD, "Error during backup ZeebeRecord " + e.getMessage());
+            backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + urlComplete + "]" + e.getMessage();
+            operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Error during backup ZeebeRecord " + e.getMessage());
         }
+        return backupOperation;
+    }
+
+    /**
+     * History backup of the web applications (Operate, Tasklist) with the REST API of the cluster:
+     * POST /v2/backups/history, then GET /v2/backups/history/{backupId} until the state is COMPLETED.
+     * Only for Elasticsearch and OpenSearch.
+     */
+    private BackupOperation historyBackup(Long backupId, OperationLog operationLog) {
+        BackupOperation backupOperation = new BackupOperation();
+        ZeebeRestApi.RestResult start = zeebeRestApi.takeHistoryBackup(backupId);
+        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Start the history backup (Operate, Tasklist) " + backupId
+                + ": status " + start.status() + " " + (start.raw() == null ? "" : start.raw()));
+        backupOperation.status = start.status();
+        if (!start.isSuccess()) {
+            backupOperation.title = "History backup refused (status " + start.status() + ")";
+            backupOperation.message = "POST " + zeebeRestApi.getBaseUrl() + "/backups/history answered " + start.status() + " " + start.raw();
+            return backupOperation;
+        }
+
+        int timeToWait = 500;
+        for (int loop = 0; loop < 2000; loop++) {
+            try {
+                Thread.sleep(timeToWait);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                backupOperation.status = 500;
+                backupOperation.title = "History backup interrupted";
+                return backupOperation;
+            }
+            if (loop > 20) {
+                timeToWait = 2000;
+            }
+            ZeebeRestApi.RestResult state = zeebeRestApi.getHistoryBackup(backupId);
+            if (!state.isSuccess() || state.body() == null) {
+                // 404: the backup is not visible yet
+                continue;
+            }
+            String stateName = state.body().path("state").asText();
+            if ("COMPLETED".equalsIgnoreCase(stateName)) {
+                operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "History backup " + backupId + " completed");
+                backupOperation.status = 202;
+                return backupOperation;
+            }
+            if ("FAILED".equalsIgnoreCase(stateName) || "INCOMPLETE".equalsIgnoreCase(stateName) || "INCOMPATIBLE".equalsIgnoreCase(stateName)) {
+                backupOperation.status = 500;
+                backupOperation.title = "History backup " + backupId + " is " + stateName;
+                backupOperation.message = state.body().path("failureReason").asText(state.raw());
+                return backupOperation;
+            }
+        }
+        backupOperation.status = 500;
+        backupOperation.title = "History backup " + backupId + " is too long";
+        backupOperation.message = "The history backup is not completed after the waiting time";
         return backupOperation;
     }
 
@@ -256,7 +329,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
                 logger.error("Exception in esBackup", e);
                 backupOperation.status = 400;
                 backupOperation.title = e.getMessage();
-                backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.ZEEBERECORD + "] Url[" + urlComplete + "]" + e.getMessage();
+                backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + urlComplete + "]" + e.getMessage();
 
                 return backupOperation;
             }
@@ -276,7 +349,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
                     backupIsFinished = false;
                 }
                 if (!written) {
-                    operationLog.addSnapshotName(CamundaApplicationInt.COMPONENT.ZEEBERECORD, snapshotName);
+                    operationLog.addSnapshotName(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, snapshotName);
 
                 }
             }
@@ -306,7 +379,7 @@ public class ElasticSearchConnect implements BackupComponentInt {
                 String state = snapshot.path("state").asText();
                 backupInfo.status = "SUCCESS".equals(state) ? BackupInfo.Status.COMPLETED : BackupInfo.Status.FAILED;
                 backupInfo.backupId = snapshot.path("snapshot").asInt();
-                backupInfo.components.add(CamundaApplicationInt.COMPONENT.ZEEBERECORD);
+                backupInfo.components.add(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE);
                 // search the date in the first partition
                 // value is 2025-05-29T00:16:55.622+0000
                 String timestamp = snapshot.path("start_time").asText();

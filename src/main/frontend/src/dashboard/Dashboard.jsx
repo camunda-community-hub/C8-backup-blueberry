@@ -274,6 +274,12 @@ class Dashboard extends React.Component {
                                                 {this.renderConnection("Optimize", this.state.connection?.optimize)}
                                             </td>}
                                     </tr>
+                                    {this.state.connection?.zeebeVersion &&
+                                        <tr>
+                                            <td colSpan="4" style={{textAlign: "center"}}>
+                                                Zeebe version: <b>{this.state.connection.zeebeVersion}</b>
+                                            </td>
+                                        </tr>}
                                     <tr>
                                         <td colSpan="4">
                                             {this.state.connection.status}

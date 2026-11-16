@@ -1,6 +1,7 @@
 package io.camunda.blueberry.operation.checkdata;
 
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.backup.BackupJob;
 import io.camunda.blueberry.operation.backup.BackupManager;

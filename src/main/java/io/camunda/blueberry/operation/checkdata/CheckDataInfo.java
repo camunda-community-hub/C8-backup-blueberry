@@ -1,7 +1,7 @@
 package io.camunda.blueberry.operation.checkdata;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.camunda.blueberry.connect.ElasticSearchConnect;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.ZeebeConnect;
 
 import java.util.HashMap;

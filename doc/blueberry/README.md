@@ -211,6 +211,140 @@ The configuration is available in the application.yaml, and thanks to SpringBoot
 
 
 
+# Connect a local Blueberry to a cluster
+Different port must be accessible to let Blueberry connect to the cluster.
+
+A Blueberry running on your PC reaches the cluster in two ways:
+
+* **Port-forward** (`kubectl port-forward`): one port of your PC is connected to one pod or service port.
+* **Proxy** (`kubectl proxy`): one port of your PC (8001) gives access, through the Kubernetes API, to any service or pod of the cluster.
+
+Both need a Kubernetes access on your PC: `gcloud auth login`, then `gcloud container clusters get-credentials ...`
+(and the plugin `gke-gcloud-auth-plugin` on GKE). Replace `camunda` by your namespace, and `camunda-...` by the names of
+your Helm release.
+
+## What Blueberry must reach
+
+| Element                         | Port  | Used for                                                                                           | Blueberry parameter                                |
+|---------------------------------|-------|----------------------------------------------------------------------------------------------------|----------------------------------------------------|
+| Zeebe gateway, REST API         | 8080  | The backup: pause/resume the exporting, runtime backup (`/v2/exporting`, `/v2/backups`).           | `camunda.client.zeebe.restAddress`                 |
+| Zeebe gateway, gRPC             | 26500 | The Zeebe client: topology, version, cluster information.                                          | `camunda.client.zeebe.grpcAddress`                 |
+| Zeebe, actuator (management)    | 9600  | Connection check, exporters, partitions, the configuration (`/actuator/env`).                      | `blueberry.zeebeActuatorUrl`, `blueberry.zeebeActuatorPodUrl` |
+| Elasticsearch                   | 9200  | The snapshots of the secondary storage: list, repositories, restore.                               | `blueberry.elasticsearchurl`                       |
+| Optimize, actuator (management) | 8092  | The Optimize backup.                                                                               | `blueberry.optimizeActuatorUrl`                    |
+| Kubernetes API                  | 443   | The restore: stop and start the components, delete the volumes of Zeebe, read the pods.            | `blueberry.kubeConfig`                             |
+
+Since Camunda 8.8, Operate and Tasklist are part of the orchestration cluster (the Zeebe pods): they have no port of their own.
+The Zeebe gateway service gives the three ports 8080, 9600 and 26500.
+
+## Port-forward: the list of ports
+
+```shell
+# Zeebe: REST API (backup), gRPC (client), actuator (management)
+kubectl port-forward svc/camunda-zeebe-gateway 8080:8080   -n camunda &
+kubectl port-forward svc/camunda-zeebe-gateway 26500:26500 -n camunda &
+kubectl port-forward svc/camunda-zeebe-gateway 9600:9600   -n camunda &
+
+# One actuator per broker, if blueberry.zeebeActuatorPodUrl uses the broker number (see below)
+kubectl port-forward pod/camunda-zeebe-0 9600:9600 -n camunda &
+kubectl port-forward pod/camunda-zeebe-1 9601:9600 -n camunda &
+kubectl port-forward pod/camunda-zeebe-2 9602:9600 -n camunda &
+
+# Elasticsearch (the secondary storage)
+kubectl port-forward svc/elasticsearch-master 9200:9200 -n camunda &
+
+# Optimize (if Optimize is deployed)
+kubectl port-forward svc/camunda-optimize 8092:8092 -n camunda &
+```
+
+The matching configuration:
+
+```yaml
+blueberry:
+  zeebeActuatorUrl: http://localhost:9600
+  # The url contains {BROKERID}: http://localhost:960{BROKERID} gives 9600, 9601, 9602
+  zeebeActuatorPodUrl: http://localhost:960{BROKERID}
+  elasticsearchurl: http://localhost:9200
+  optimizeActuatorUrl: http://localhost:8092
+camunda:
+  client:
+    zeebe:
+      restAddress: http://localhost:8080
+      grpcAddress: http://localhost:26500
+```
+
+Open in a browser, if you want to see the applications: `http://localhost:8080/operate` and `http://localhost:8080/tasklist`.
+
+## Why a proxy: the restore restarts the pods
+
+A `kubectl port-forward` is connected to **one pod**: even when it is started on a service, kubectl chooses a pod when it starts.
+When this pod is deleted or restarted, the port-forward is broken (`lost connection to pod`), and it does not reconnect.
+
+The restore stops the components (Zeebe, the gateway, Optimize), deletes the volumes of Zeebe, then starts the components again.
+So during the restore, and when it ends, all the port-forward of the Zeebe pods are broken. Blueberry can't call the actuator
+or the REST API any more: it can't see that Zeebe is restarted, nor the result of the restore. You must stop the port-forward
+and start them again by hand.
+
+The proxy does not have this issue. `kubectl proxy` goes through the Kubernetes API, which looks for the service or the pod
+**at each request**: after a restart, the next request reaches the new pod. The proxy gives the access to the actuator and to the
+REST API, and to all the pods, with only one port.
+
+```shell
+kubectl proxy --port=8001
+```
+
+The url of a service or of a pod through the proxy:
+
+```
+http://localhost:8001/api/v1/namespaces/{namespace}/services/{service}:{port}/proxy/{path}
+http://localhost:8001/api/v1/namespaces/{namespace}/pods/{pod}:{port}/proxy/{path}
+```
+
+The configuration for the restore, with the proxy:
+
+```yaml
+blueberry:
+  # Actuator of the Zeebe gateway, and of each broker (the pod name camunda-zeebe-0 is stable: it is a StatefulSet)
+  zeebeActuatorUrl: http://localhost:8001/api/v1/namespaces/camunda/services/camunda-zeebe-gateway:9600/proxy
+  zeebeActuatorPodUrl: http://localhost:8001/api/v1/namespaces/camunda/pods/camunda-zeebe-{BROKERID}:9600/proxy
+  optimizeActuatorUrl: http://localhost:8001/api/v1/namespaces/camunda/services/camunda-optimize:8092/proxy
+  # Elasticsearch is not stopped by the restore: a port-forward is enough
+  elasticsearchurl: http://localhost:9200
+  # The access to the Kubernetes API for the restore (a kubeconfig which uses the proxy, or your kubeconfig)
+  kubeConfig: src/main/resources/kube-proxy.yaml
+camunda:
+  client:
+    zeebe:
+      # The proxy is HTTP: the Zeebe client uses the REST API. The gRPC port (26500) can't go through the proxy.
+      preferRestOverGrpc: true
+      restAddress: http://localhost:8001/api/v1/namespaces/camunda/services/camunda-zeebe-gateway:8080/proxy
+      grpcAddress: http://localhost:26500
+```
+
+Remarks:
+
+* The proxy is HTTP only. The gRPC port 26500 can't go through it: that is why the REST address is used (`preferRestOverGrpc: true`).
+  The backup (pause, runtime backup) uses the REST API only, so it works with the proxy.
+* The proxy uses your Kubernetes credentials (the `gcloud` login): Blueberry gives no credentials to the proxy.
+  The request of the actuator through the proxy is a request to the Kubernetes API: your account needs the right to read the services and pods.
+* Elasticsearch is not stopped by the restore (all the other components are). A simple port-forward on `elasticsearch-master`
+  works. The proxy works too: `.../services/elasticsearch-master:9200/proxy`.
+* Keep `kubectl proxy` open in one terminal, and the port-forward you need (Elasticsearch) in another.
+
+## Check the access
+
+```shell
+# Through a port-forward: 401 or 200 means that the REST API answers (it asks for a login)
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/v2/topology
+
+# Through the proxy
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8001/api/v1/namespaces/camunda/services/camunda-zeebe-gateway:9600/proxy/actuator/health
+```
+
+* `Unable to listen on port ...: address already in use`: another port-forward, or another program, already uses this port of your PC.
+* From Windows, with `kubectl` running in WSL: Windows may not reach the ports of WSL. Start the commands in the same system as Blueberry.
+
+
 
 # Topics
 

@@ -16,12 +16,6 @@ public class BlueberryConfig {
     @Value("${blueberry.optimizeActuatorUrl:@null}")
     private String optimizeActuatorUrl;
 
-    @Value("${blueberry.operateActuatorUrl:@null}")
-    private String operateActuatorUrl;
-
-    @Value("${blueberry.tasklistActuatorUrl:@null}")
-    private String tasklistActuatorUrl;
-
     @Value("${blueberry.zeebeActuatorUrl:http://localhost:9600}")
     private String zeebeActuatorUrl;
 
@@ -36,10 +30,34 @@ public class BlueberryConfig {
     private String elasticsearchUrl;
 
     /**
-     * true: the zeebe-record indices are backed up in Elasticsearch (ZEEBERECORD component). false: ignored
+     * true: the zeebe-record indices are backed up in Elasticsearch (secondary storage). false: ignored
      */
     @Value("${blueberry.elasticsearch.enabled:false}")
     private boolean elasticsearchEnabled;
+
+    /**
+     * Secondary storage of the cluster: elasticsearch, sqlserver, ... It is detected on the cluster when possible
+     * (see SecondaryStorageDetector). This value is the option B, used when the detection is not possible.
+     * The name is matched whatever the case (blueberry.secondaryStorage or blueberry.secondarystorage).
+     */
+    @Value("${blueberry.secondarystorage:}")
+    private String secondaryStorage;
+
+    /**
+     * Base url of the Zeebe REST API (/v2/...). Empty: the rest address of the Camunda client is used
+     * (camunda.client.zeebe.rest-address)
+     */
+    @Value("${blueberry.zeebeRestUrl:}")
+    private String zeebeRestUrl;
+
+    /**
+     * Basic authentication of the REST API. Same values as the Camunda client by default
+     */
+    @Value("${blueberry.zeebeRestUsername:${camunda.client.auth.username:}}")
+    private String zeebeRestUsername;
+
+    @Value("${blueberry.zeebeRestPassword:${camunda.client.auth.password:}}")
+    private String zeebeRestPassword;
 
     /**
      * false: Optimize is not part of the cluster, it is ignored (no connection, no backup, no rule)
@@ -58,12 +76,6 @@ public class BlueberryConfig {
     /**
      * Repository in Elastic search can be created to backup indexes
      */
-    @Value("${blueberry.elasticsearch.operateContainerBasePath:operate}")
-    private String operateContainerBasePath;
-
-    @Value("${blueberry.elasticsearch.tasklistContainerBasePath:tasklist}")
-    private String tasklistContainerBasePath;
-
     @Value("${blueberry.elasticsearch.optimizeContainerBasePath:optimize}")
     private String optimizeContainerBasePath;
 
@@ -76,12 +88,6 @@ public class BlueberryConfig {
     /**
      * These values are temporary. KubernetesConnect should get that values directly from pôds
      */
-    @Value("${blueberry.operateRepository}")
-    private String operateRepository;
-
-    @Value("${blueberry.tasklistRepository}")
-    private String tasklistRepository;
-
     @Value("${blueberry.optimizeRepository}")
     private String optimizeRepository;
 
@@ -120,14 +126,6 @@ public class BlueberryConfig {
         return optimizeActuatorUrl;
     }
 
-    public String getOperateActuatorUrl() {
-        return operateActuatorUrl;
-    }
-
-    public String getTasklistActuatorUrl() {
-        return tasklistActuatorUrl;
-    }
-
     public String getZeebeActuatorUrl() {
         return zeebeActuatorUrl;
     }
@@ -154,6 +152,25 @@ public class BlueberryConfig {
         return optimizeEnabled;
     }
 
+    /**
+     * @return the secondary storage given in the configuration, empty if none
+     */
+    public String getSecondaryStorage() {
+        return secondaryStorage == null ? "" : secondaryStorage.trim();
+    }
+
+    public String getZeebeRestUrl() {
+        return zeebeRestUrl == null ? "" : zeebeRestUrl.trim();
+    }
+
+    public String getZeebeRestUsername() {
+        return zeebeRestUsername == null ? "" : zeebeRestUsername;
+    }
+
+    public String getZeebeRestPassword() {
+        return zeebeRestPassword == null ? "" : zeebeRestPassword;
+    }
+
     public String getNamespace() {
         return namespace;
     }
@@ -174,14 +191,6 @@ public class BlueberryConfig {
         return zeebeRecordRepository;
     }
 
-    public String getOperateContainerBasePath() {
-        return operateContainerBasePath;
-    }
-
-    public String getTasklistContainerBasePath() {
-        return tasklistContainerBasePath;
-    }
-
     public String getOptimizeContainerBasePath() {
         return optimizeContainerBasePath;
     }
@@ -192,14 +201,6 @@ public class BlueberryConfig {
 
     public String getKubeConfig() {
         return kubeConfig == null || kubeConfig.trim().isEmpty() ? null : kubeConfig;
-    }
-
-    public String getOperateRepository() {
-        return operateRepository;
-    }
-
-    public String getTasklistRepository() {
-        return tasklistRepository;
     }
 
     public String getOptimizeRepository() {

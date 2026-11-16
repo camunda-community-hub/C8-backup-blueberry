@@ -3,6 +3,7 @@ package io.camunda.blueberry.api;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.operation.OperationLog;
 import io.camunda.blueberry.operation.backup.BackupJob;
 import io.camunda.blueberry.operation.backup.BackupManager;
@@ -120,10 +121,12 @@ public class DashboardRestController {
                     "zeebe", toMap(zeebeConnect.isConnectedInformation()),
                     "zeebeActuator", toMap(zeebeConnect.isConnectedActuatorInformation()),
                     "elasticsearch", toMap(elasticSearchConnect.isConnectedInformation()),
-                    "optimize", toMap(optimizeConnect.isConnectedInformation())
+                    "optimize", toMap(optimizeConnect.isConnectedInformation()),
+                    "zeebeVersion", zeebeConnect.getZeebeVersion()
             );
         } catch (Exception e) {
             return Map.of("status", "Error running check connection " + e.getMessage(),
+                    "zeebeVersion", "",
                     "zeebe", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
                     "elasticsearch", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS),
                     "optimize", Map.of("connection", COMPONENT_VERIFICATION_IN_PROGRESS)

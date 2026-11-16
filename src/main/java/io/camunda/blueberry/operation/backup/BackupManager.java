@@ -2,6 +2,8 @@ package io.camunda.blueberry.operation.backup;
 
 
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
+import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
@@ -9,30 +11,31 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * This class are in charge to start a backup,
+ * This class is in charge to start a backup,
  */
 @Component
 public class BackupManager {
-    final OperateConnect operateConnect;
-    final TaskListConnect taskListConnect;
+    private final SecondaryStorageFactory secondaryStorageFactory;
+    Logger logger = LoggerFactory.getLogger(BackupManager.class);
     final OptimizeConnect optimizeConnect;
     final ZeebeConnect zeebeConnect;
-    private final ElasticSearchConnect elasticSearchConnect;
-    Logger logger = LoggerFactory.getLogger(BackupManager.class);
-    List<BackupComponentInt> listBackupComponents;
     private BackupJob backupJob;
 
-    public BackupManager(OperateConnect operateConnect, TaskListConnect taskListConnect, OptimizeConnect optimizeConnect,
-                         ZeebeConnect zeebeConnect, ElasticSearchConnect elasticSearchConnect,
+    List<BackupComponentInt> listBackupComponents;
+
+    public BackupManager(OptimizeConnect optimizeConnect,
+                         ZeebeConnect zeebeConnect, SecondaryStorageFactory secondaryStorageFactory,
                          List<BackupComponentInt> listBackupComponents) {
-        this.operateConnect = operateConnect;
-        this.taskListConnect = taskListConnect;
         this.optimizeConnect = optimizeConnect;
         this.zeebeConnect = zeebeConnect;
-        this.elasticSearchConnect = elasticSearchConnect;
+        this.secondaryStorageFactory = secondaryStorageFactory;
         this.listBackupComponents = listBackupComponents;
     }
 
@@ -40,26 +43,42 @@ public class BackupManager {
         // Verify first is there is not already a backup in progress
         if (backupJob != null && backupJob.getJobStatus() == BackupJob.JOBSTATUS.INPROGRESS)
             throw new BackupException(null, 400, "Job Already in progress", "In Progress[" + backupJob.getBackupId() + "]", backupJob.getBackupId());
-        // start a backup, asynchrously
-        backupJob = new BackupJob(operateConnect, taskListConnect, optimizeConnect, zeebeConnect, elasticSearchConnect, new OperationLog());
-        Long backupId = backupParameter.backupId;
-        if (backupParameter.nextId) {
-            logger.info("No backup is provided, calculate the new Id");
-            // calculate a new backup ID
-            long maxId = 0;
-            try {
-                ListBackupResult listBackup = getListBackups();
-                for (BackupInfo info : listBackup.listBackups) {
-                    if (info.backupId > maxId)
-                        maxId = info.backupId;
-                }
+        // start a backup, asynchronously
+        backupJob = new BackupJob(optimizeConnect, zeebeConnect, secondaryStorageFactory, new OperationLog());
+        Long backupId=null;
+        BACKUPIDPOLICY backupPolicy = backupParameter.getBackupPolicy();
+        switch (backupPolicy) {
+            case BACKUPIDPOLICY.NEXTID:
+                logger.info("No backup is provided, calculate the new Id");
+                // calculate a new backup ID
+                long maxId = 0;
+                try {
+                    ListBackupResult listBackup = getListBackups();
+                    for (BackupInfo info : listBackup.listBackups) {
+                        if (info.backupId > maxId)
+                            maxId = info.backupId;
+                    }
 
-            } catch (OperationException e) {
-                logger.error("Error when accessing the list of Backup: {}", e);
-                throw new BackupException(null, e.getStatus(), e.getError(), e.getMessage(), backupId);
-            }
-            backupId = maxId + 1;
-            logger.info("No backupId is provided, calculate from the list +1 : {}", backupId);
+                } catch (OperationException e) {
+                    logger.error("Error when accessing the list of Backup: {}", e);
+                    throw new BackupException(null, e.getStatus(), e.getError(), e.getMessage(), backupId);
+                }
+                backupId = maxId + 1;
+                logger.info("NEXTID policy: calculate from the list +1 : {}", backupId);
+                break;
+
+            case BACKUPIDPOLICY.TIMEBACKUP:
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyddMMHHss");
+                String backupIdSt = ZonedDateTime.now(ZoneId.of(ZoneOffset.UTC.getId())).format(formatter);
+                backupId = Long.parseLong(backupIdSt);
+                logger.info("TIMEBACKUP policy: calculate from the list +1 : {}", backupId);
+                break;
+
+            case BACKUPIDPOLICY.EXPLICIT:
+                backupId = backupParameter.backupId;
+                if (backupId == null)
+                    throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.NO_BACKUPID, "No backupId is given with an explicit policy", "Provide a backupId");
+                logger.info("TIMEBACKUP policy: calculate from the list +1 : {}", backupId);
         }
         // Start in a new thread
         startBackupAsynchronously(backupId);
@@ -79,9 +98,9 @@ public class BackupManager {
 
     /**
      * If a job is started, then a backupJob exist.
-     * If the backup is terminated, then the backypJob is still available, with a status "TERMINATED"
+     * If the backup is terminated, then the backupJob is still available, with a status "TERMINATED"
      *
-     * @return
+     * @return the backup job
      */
     public BackupJob getBackupJob() {
         return backupJob;
@@ -92,6 +111,8 @@ public class BackupManager {
         public List<OperationException> listErrors = new ArrayList<>();
         public Map<String,String> listUrls = new HashMap<>();
     }
+
+
     /**
      * Return the list of backup
      * All components are asking its backup, to establish a complete list
@@ -101,6 +122,10 @@ public class BackupManager {
     public ListBackupResult getListBackups() throws OperationException {
         ListBackupResult listBackupResult = new ListBackupResult();
         for (BackupComponentInt backupComponent : listBackupComponents) {
+            // Only the secondary storage of the cluster is explored
+            if (backupComponent instanceof SecondaryStorageInt && !backupComponent.isActive()) {
+                continue;
+            }
             try {
                 mergeListBackups(listBackupResult.listBackups, backupComponent.getListBackups());
                 listBackupResult.listUrls.put(backupComponent.getComponent().name(),backupComponent.getUrlListBackup());
@@ -149,8 +174,22 @@ public class BackupManager {
 
     }
 
+    public enum BACKUPIDPOLICY { EXPLICIT, NEXTID, TIMEBACKUP}
     public static class BackupParameter {
-        public boolean nextId;
+
+        /**
+         * the nextId is keep for ascendant
+         */
+        public Boolean nextId;
+        public BACKUPIDPOLICY backupPolicy;
+        public BACKUPIDPOLICY getBackupPolicy() {
+            if (backupPolicy==null && nextId!=null)
+                return BACKUPIDPOLICY.NEXTID;
+            if (backupPolicy==null)
+                return BACKUPIDPOLICY.TIMEBACKUP;
+            return backupPolicy;
+
+        }
         public Long backupId;
     }
 }
