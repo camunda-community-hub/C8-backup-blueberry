@@ -10,6 +10,7 @@ import React from 'react';
 import {Button, InlineNotification, TextInput} from "carbon-components-react";
 import {ArrowRepeat} from "react-bootstrap-icons";
 import RestCallService from "../services/RestCallService";
+import RepositoryTable from "../component/RepositoryTable";
 
 class Parameters extends React.Component {
 
@@ -28,6 +29,12 @@ class Parameters extends React.Component {
 
     componentDidMount(prevProps) {
         this.refresh();
+    }
+
+    /* Is the container configured in Blueberry of this type? (gcs, azure, s3), whatever the case */
+    isContainerType(type) {
+        const containerType = this.state.parameters.containerType;
+        return !!containerType && String(containerType).trim().toLowerCase() === type;
     }
 
     render() {
@@ -152,6 +159,16 @@ class Parameters extends React.Component {
                     </InlineNotification>
                 </div>
                 <div className="row" style={{marginTop: "10px"}}>
+                    <div className="col-md-8">
+                        <RepositoryTable/>
+                        <p className="text-muted">
+                            Configuration: the repository used by the backup and by the restore.
+                            Cluster: the repository read in the component. "env not exposed" means that the
+                            component does not expose the endpoint env of its actuator.
+                        </p>
+                    </div>
+                </div>
+                <div className="row" style={{marginTop: "10px"}}>
                     <div className="col-md-2">
                         <TextInput
                             id="operateRepository"
@@ -159,6 +176,7 @@ class Parameters extends React.Component {
                             value={this.state.parameters.operateRepository}
                             readOnly
                         />
+                        <b>{this.state.parameters.operateSource}</b>
                     </div>
                     <div className="col-md-2">
                         <TextInput
@@ -167,9 +185,6 @@ class Parameters extends React.Component {
                             value={this.state.parameters.operateContainerBasePath}
                             readOnly
                         />
-                    </div>
-                    <div className="col-md-2">
-                        <b>{this.state.parameters.operateSource}</b>
                     </div>
                     <div className="col-md-6">
                         If Operate open the actuator/env API, then information come directly from Operate. Else, from
@@ -198,6 +213,7 @@ class Parameters extends React.Component {
                             value={this.state.parameters.tasklistRepository}
                             readOnly
                         />
+                        <b>{this.state.parameters.tasklistSource}</b>
                     </div>
                     <div className="col-md-2">
                         <TextInput
@@ -287,13 +303,34 @@ class Parameters extends React.Component {
                 <div className="row" style={{marginTop: "10px"}}>
                     <div className="col-md-2">
                         <TextInput
-                            id="elasticsearchContainerType"
-                            labelText="elasticsearchContainerType"
-                            value={this.state.parameters.elasticsearchContainerType}
+                            id="containerType"
+                            labelText="containerType"
+                            value={this.state.parameters.containerType}
                             readOnly
                         />
                     </div>
                 </div>
+                {/* Only the fields of the selected container type are displayed */}
+                {this.isContainerType("gcs") &&
+                <div className="row" style={{marginTop: "10px"}}>
+                    <div className="col-md-2">
+                        <TextInput
+                            id="gcsBucket"
+                            labelText="gcsBucket"
+                            value={this.state.parameters.gcsBucket}
+                            readOnly
+                        />
+                    </div>
+                    <div className="col-md-2">
+                        <TextInput
+                            id="gcsBasePath"
+                            labelText="gcsBasePath"
+                            value={this.state.parameters.gcsBasePath}
+                            readOnly
+                        />
+                    </div>
+                </div>}
+                {this.isContainerType("azure") &&
                 <div className="row" style={{marginTop: "10px"}}>
                     <div className="col-md-2">
                         <TextInput
@@ -303,7 +340,8 @@ class Parameters extends React.Component {
                             readOnly
                         />
                     </div>
-                </div>
+                </div>}
+                {this.isContainerType("s3") &&
                 <div className="row" style={{marginTop: "10px"}}>
                     <div className="col-md-2">
                         <TextInput
@@ -331,7 +369,7 @@ class Parameters extends React.Component {
                         />
                     </div>
 
-                </div>
+                </div>}
 
             </div>
         )

@@ -221,6 +221,10 @@ class Chart extends React.Component {
       const resultTransformed = this.getLabelsDataFromList(this.state.dataList);
       dataChart.labels = resultTransformed.labels;
       dataset.data = resultTransformed.data;
+      if (resultTransformed.backgroundColor.length === resultTransformed.data.length) {
+        dataset.backgroundColor = resultTransformed.backgroundColor;
+        dataset.borderColor = resultTransformed.borderColor;
+      }
     }
     return dataChart;
   }
@@ -307,11 +311,17 @@ class Chart extends React.Component {
   getLabelsDataFromList(dataList) {
     const result = {
       'labels': [],
-      'data': []
+      'data': [],
+      'backgroundColor': [],
+      'borderColor': []
     };
     for (let i in dataList) {
       result.labels.push(dataList[i].label)
       result.data.push(dataList[i].value)
+      if (dataList[i].backgroundColor) {
+        result.backgroundColor.push(dataList[i].backgroundColor)
+        result.borderColor.push(dataList[i].borderColor || dataList[i].backgroundColor)
+      }
     }
     // console.log("Chart:getLabelsDataFromList : " + result + " from " + dataList);
     return result;

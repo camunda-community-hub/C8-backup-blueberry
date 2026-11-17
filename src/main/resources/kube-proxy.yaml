@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Config
+clusters:
+  - name: proxy
+    cluster:
+      server: http://localhost:8001
+contexts:
+  - name: proxy
+    context:
+      cluster: proxy
+      user: proxy
+current-context: proxy
+users:
+  - name: proxy
+    user: {}

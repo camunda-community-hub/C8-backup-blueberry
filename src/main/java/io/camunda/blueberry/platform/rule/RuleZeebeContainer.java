@@ -76,13 +76,14 @@ public class RuleZeebeContainer implements Rule {
 
             // According to the type of storage, different check
             List<String> additionalParametersToCheck = null;
-            if (ConfigZeebe.STORE_AZURE.equals(resultParameter.parameters.get(ConfigZeebe.CONTAINER_CONTAINERTYPE))) {
+            String containerTypeValue = String.valueOf(resultParameter.parameters.get(ConfigZeebe.CONTAINER_CONTAINERTYPE));
+            if (ConfigZeebe.STORE_AZURE.equalsIgnoreCase(containerTypeValue)) {
                 additionalParametersToCheck = List.of(ConfigZeebe.AZURE_CONNECTIONSTRING, ConfigZeebe.CONTAINER_BASEPATH, ConfigZeebe.CONTAINER_BUCKETNAME);
             }
-            if (ConfigZeebe.STORE_GCS.equals(resultParameter.parameters.get(ConfigZeebe.CONTAINER_CONTAINERTYPE))) {
+            if (ConfigZeebe.STORE_GCS.equalsIgnoreCase(containerTypeValue)) {
                 additionalParametersToCheck = List.of(ConfigZeebe.CONTAINER_BASEPATH, ConfigZeebe.CONTAINER_BUCKETNAME);
             }
-            if (ConfigZeebe.STORE_S3.equals(resultParameter.parameters.get(ConfigZeebe.CONTAINER_CONTAINERTYPE))) {
+            if (ConfigZeebe.STORE_S3.equalsIgnoreCase(containerTypeValue)) {
                 additionalParametersToCheck = List.of(ConfigZeebe.CONTAINER_BASEPATH, ConfigZeebe.CONTAINER_BUCKETNAME);
             }
 

@@ -18,6 +18,7 @@ public class RestTemplateConfig {
         // (com.fasterxml.jackson): without this converter, "Type definition error: [simple type, class
         // com.fasterxml.jackson.databind.JsonNode]" is raised. It must come before the Jackson 3 converter, but AFTER
         // the String converter: else a String response (an empty body for example) is parsed as JSON and fails.
+        // ("Error while extracting response for type [class java.lang.String] and content type [application/json]").
         List<HttpMessageConverter<?>> converters = restTemplate.getMessageConverters();
         int position = converters.size();
         for (int i = 0; i < converters.size(); i++) {

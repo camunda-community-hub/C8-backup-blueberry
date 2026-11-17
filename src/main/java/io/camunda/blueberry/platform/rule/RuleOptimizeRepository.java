@@ -93,6 +93,8 @@ public class RuleOptimizeRepository implements Rule {
         ruleInfo.addDetails(resultParameter.accessActuator ? "Access RepositoryName exploring Optimize /actuator/env" : "Access RepositoryName exploring Blueberry configuration");
 
         String optimizeRepository = (String) resultParameter.parameters.get(OPTIMIZE_REPOSITORY);
+        ruleInfo.addActuatorEnvInfo("Optimize", blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env",
+                resultParameter, optimizeRepository);
 
         if (optimizeRepository == null) {
             ruleInfo.setStatus(RuleStatus.FAILED);
@@ -136,7 +138,6 @@ public class RuleOptimizeRepository implements Rule {
                 ruleInfo.setStatus(RuleStatus.FAILED);
             }
             ruleInfo.addVerifications("Check Elasticsearch repository [" + optimizeRepository
-
                             + "] basePath[" + blueberryConfig.getOptimizeContainerBasePath()
                             + "] " + operationResult.details,
                     operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
@@ -166,6 +167,11 @@ public class RuleOptimizeRepository implements Rule {
     private String getRepositoryByConfiguration(RuleInfo ruleInfo) {
         ruleInfo.addDetails("Access RepositoryName from Blueberry configuration");
         return blueberryConfig.getOptimizeRepository();
+    }
+
+    private String getRepositoryByOperateEnvironment(RuleInfo ruleInfo) {
+        ruleInfo.addDetails("Access RepositoryName exploring Operate environment");
+        return null;
     }
 
     private String getRepositoryKubernetes(RuleInfo ruleInfo) {

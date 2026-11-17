@@ -89,17 +89,17 @@ public class ConfigZeebe {
         Object store = propertiesMap.get("store");
         resultParameter.parameters.put(CONTAINER_CONTAINERTYPE, store);
 
-        if (STORE_GCS.equals(store)) {
+        if (STORE_GCS.equalsIgnoreCase(String.valueOf(store))) {
             Map<String, Object> gcsProperties = (Map<String, Object>) propertiesMap.get("gcs");
             resultParameter.parameters.put(CONTAINER_BUCKETNAME, gcsProperties == null ? null : gcsProperties.get("bucketName"));
             resultParameter.parameters.put(CONTAINER_BASEPATH, gcsProperties == null ? null : gcsProperties.get("basePath"));
         }
-        if (STORE_S3.equals(store)) {
+        if (STORE_S3.equalsIgnoreCase(String.valueOf(store))) {
             Map<String, Object> gcsProperties = (Map<String, Object>) propertiesMap.get("s3");
             resultParameter.parameters.put(CONTAINER_BUCKETNAME, gcsProperties == null ? null : gcsProperties.get("bucketName"));
             resultParameter.parameters.put(CONTAINER_BASEPATH, gcsProperties == null ? null : gcsProperties.get("basePath"));
         }
-        if (STORE_AZURE.equals(store)) {
+        if (STORE_AZURE.equalsIgnoreCase(String.valueOf(store))) {
             Map<String, Object> gcsProperties = (Map<String, Object>) propertiesMap.get("azure");
             resultParameter.parameters.put(CONTAINER_BUCKETNAME, gcsProperties == null ? null : gcsProperties.get("containerName"));
             resultParameter.parameters.put(CONTAINER_BASEPATH, gcsProperties == null ? null : gcsProperties.get("basePath"));
@@ -110,15 +110,15 @@ public class ConfigZeebe {
     private AccessParameterValue.ResultParameter fullFillFromConfiguration(AccessParameterValue.ResultParameter resultParameter) {
         String store = blueberryConfig.getZeebeContainerType();
         resultParameter.parameters.put(CONTAINER_CONTAINERTYPE, store);
-        if ("GCS".equals(store)) {
+        if ("GCS".equalsIgnoreCase(store)) {
             resultParameter.parameters.put(CONTAINER_BUCKETNAME, blueberryConfig.getGcsBucket());
             resultParameter.parameters.put(CONTAINER_BASEPATH, blueberryConfig.getGcsBasePath());
         }
-        if ("S3".equals(store)) {
+        if ("S3".equalsIgnoreCase(store)) {
             resultParameter.parameters.put(CONTAINER_BUCKETNAME, blueberryConfig.getS3Bucket());
             resultParameter.parameters.put(CONTAINER_BASEPATH, blueberryConfig.getS3BasePath());
         }
-        if ("AZURE".equals(store)) {
+        if ("AZURE".equalsIgnoreCase(store)) {
             resultParameter.parameters.put(CONTAINER_BUCKETNAME, blueberryConfig.getAzureContainerName());
             resultParameter.parameters.put(CONTAINER_BASEPATH, blueberryConfig.getAzureBasePath());
         }

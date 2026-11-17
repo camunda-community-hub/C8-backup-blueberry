@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -179,7 +180,8 @@ public class WebActuator {
                             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 
                             ZonedDateTime zonedDateTime = ZonedDateTime.parse(timestamp, formatter);
-                            backupInfo.backupTime = zonedDateTime.toLocalDateTime();
+                            // UTC: the API subtracts the timezone offset of the user (see DateOperation)
+                            backupInfo.backupTime = zonedDateTime.withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
 
                         }
                         return backupInfo;

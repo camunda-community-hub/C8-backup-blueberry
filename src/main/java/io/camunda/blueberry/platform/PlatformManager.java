@@ -37,9 +37,8 @@ public class PlatformManager {
      */
     public List<Rule.RuleInfo> checkAllRules() throws OperationException {
 
-        // Check the connection
-        if (!kubernetesConnect.isConnected())
-            kubernetesConnect.connection();
+        // Kubernetes is optional for the rules: a failure is logged, the rules still run
+        tryKubernetesConnection();
 
         logger.info("Check all rules");
         return listRules.stream()
@@ -49,12 +48,23 @@ public class PlatformManager {
 
     public List<Rule.RuleInfo> configure() throws OperationException {
 
-        // Check the connection
-        if (!kubernetesConnect.isConnected())
-            kubernetesConnect.connection();
+        // Kubernetes is optional for the rules: a failure is logged, the rules still run
+        tryKubernetesConnection();
 
         return listRules.stream()
                 .map(t -> t.configure())
                 .toList();
+    }
+
+    /**
+     * Try to connect to Kubernetes. Never throws: the rules (Elasticsearch, Zeebe, actuator) do not need it.
+     */
+    private void tryKubernetesConnection() {
+        try {
+            if (!kubernetesConnect.isConnected())
+                kubernetesConnect.connection();
+        } catch (Exception e) {
+            logger.warn("Kubernetes is not reachable, rules run without it: {}", e.getMessage());
+        }
     }
 }

@@ -72,6 +72,22 @@ public class BlueberryConfig {
     @Value("${blueberry.kubeConfig:}")
     private String kubeConfig;
 
+    /** Optional kubectl context name (e.g. kind-camunda-platform-local). Uses ~/.kube/config when kubeConfig is unset. */
+    @Value("${blueberry.kubeContext:}")
+    private String kubeContext;
+
+    @Value("${blueberry.restore.execution:false}")
+    private boolean restoreExecution;
+
+    @Value("${blueberry.restore.helmRelease:camunda87helm}")
+    private String restoreHelmRelease;
+
+    @Value("${blueberry.restore.podDeleteTimeoutSeconds:300}")
+    private int restorePodDeleteTimeoutSeconds;
+
+    @Value("${blueberry.restore.zeebeRestoreTimeoutSeconds:1800}")
+    private int restoreZeebeTimeoutSeconds;
+
 
     /**
      * Repository in Elastic search can be created to backup indexes
