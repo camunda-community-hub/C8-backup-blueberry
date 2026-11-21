@@ -21,13 +21,28 @@ public class RestorationJob {
         this.operationLog = new OperationLog();
     }
 
-    public void run(Pwc87RestoreExecutor executor, RestoreLayout layout) {
+    /**
+     * What the job runs: the restore procedure of a version
+     */
+    @FunctionalInterface
+    public interface RestoreAction {
+        void execute(OperationLog operationLog) throws Exception;
+    }
+
+    /**
+     * Restore of Camunda 8.10: the Restore API (REST)
+     */
+    public void run(RestoreApiExecutor executor) {
+        run(log -> executor.execute(backupId, log));
+    }
+
+    public void run(RestoreAction action) {
         jobStatus = JOBSTATUS.INPROGRESS;
         List<RestorePhase> phases = profile.restorePhases();
         operationLog.startOperation("Restore backup " + backupId + " (Camunda " + profile.minorVersion() + ")",
                 phases.size());
         try {
-            executor.execute(backupId, layout, operationLog);
+            action.execute(operationLog);
             operationLog.endOperation();
             jobStatus = JOBSTATUS.TERMINATED;
         } catch (Exception e) {

@@ -8,7 +8,7 @@
 
 import React from 'react';
 import {Accordion, AccordionItem, Button, InlineNotification, Link, Tag} from "carbon-components-react";
-import {ArrowRepeat, QuestionCircle, Terminal} from "react-bootstrap-icons";
+import {ArrowRepeat, ClipboardCheck, QuestionCircle, Terminal} from "react-bootstrap-icons";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import RestCallService from "../services/RestCallService";
@@ -47,7 +47,7 @@ class Configuration extends React.Component {
             <div className={"container"}>
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-10">
-                        <h1 className="title">Checkup</h1>
+                        <h1 className="title"><ClipboardCheck/> Checkup</h1>
                         <InlineNotification kind="info" hideCloseButton="true" lowContrast="false">
                             Verify the configuration, to detect any mis configuration.
                             <li> Does each component define correctly backup information</li>

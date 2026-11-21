@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>start a backup: BACKUP DATABASE ... TO DISK/URL (a native full backup, named camunda_{backupId})</li>
  *   <li>list the backups: the history of msdb (msdb.dbo.backupset)</li>
- *   <li>restore: RESTORE DATABASE ... (method {@link #restore(long)}, not used by the backup)</li>
+ *   <li>restore: RESTORE DATABASE ... (method {@link #restore(long, OperationLog)}, called by the restore of the cluster)</li>
  * </ul>
  * The file is written by the SQL Server itself: backupPath is a path on the server (for example /var/opt/mssql/backup)
  * or an URL (https://account.blob.core.windows.net/container, with a credential created on the server).
@@ -209,6 +209,37 @@ public class SqlServerConnect implements SecondaryStorageInt {
     /*  Restore                                                             */
     /* ******************************************************************** */
 
+    @Override
+    public List<String> getAliases() {
+        return List.of("mssql", "sqlserver2022");
+    }
+
+    @Override
+    public boolean isDatabase() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsRestore() {
+        return true;
+    }
+
+    /**
+     * The backup is in the history of SQL Server
+     */
+    @Override
+    public void checkRestorable(long backupId, OperationLog operationLog) throws OperationException {
+        String problem = checkConfiguration();
+        if (problem != null) {
+            throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "SQL Server is not configured", problem);
+        }
+        boolean found = getListBackups().stream().anyMatch(b -> b.backupId == backupId);
+        if (!found) {
+            throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 404, "SQL Server backup not found",
+                    "The history of SQL Server has no backup named " + BACKUP_NAME_PREFIX + backupId + " for the database [" + database + "].");
+        }
+    }
+
     /**
      * Restore the database from the backup. DESTRUCTIVE: the database is replaced (WITH REPLACE), all connections are
      * closed (SINGLE_USER). It is not called by the backup, and the Camunda cluster must be stopped before.
@@ -216,7 +247,9 @@ public class SqlServerConnect implements SecondaryStorageInt {
      * @param backupId backup to restore
      * @throws OperationException if the restore fails
      */
-    public void restore(long backupId) throws OperationException {
+    @Override
+    public void restore(long backupId, OperationLog operationLog) throws OperationException {
+        checkRestorable(backupId, operationLog);
         String problem = checkConfiguration();
         if (problem != null) {
             throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "SQL Server is not configured", problem);

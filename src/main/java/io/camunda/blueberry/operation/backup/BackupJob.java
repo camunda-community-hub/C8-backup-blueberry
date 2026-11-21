@@ -58,39 +58,9 @@ public class BackupJob {
     }
 
     /**
-     * Start a backup. Whatever the error, the job moves to FAILED and the error is added to the operation log,
-     * so the backup never stays INPROGRESS
+     * Start a backup
      */
     public void backup(long backupId) throws BackupException {
-        try {
-            runBackup(backupId);
-        } catch (BackupException e) {
-            failBackup(e.getComponent() == null ? currentComponent : e.getComponent(), e.getError() + " : " + e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            BackupException backupException = BackupException.getInstanceFromException(currentComponent, backupId, e);
-            failBackup(currentComponent, backupException.getError() + " : " + backupException.getMessage());
-            throw backupException;
-        }
-    }
-
-    /**
-     * The backup failed: status FAILED, a new ERROR record in the log, and exporting resumed if it was paused
-     */
-    private void failBackup(CamundaApplicationInt.COMPONENT component, String message) {
-        this.jobStatus = JOBSTATUS.FAILED;
-        operationLog.error(component, "Backup [" + backupId + "] failed: " + message);
-        if (exportingPaused) {
-            try {
-                zeebeConnect.resumeExporting(operationLog);
-                exportingPaused = false;
-            } catch (Exception e) {
-                operationLog.error(CamundaApplicationInt.COMPONENT.ZEEBE, "Can't resume Zeebe exporting after the failure: " + e.getMessage());
-            }
-        }
-    }
-
-    private void runBackup(long backupId) throws BackupException {
         operationLog.startOperation("Backup", NUMBER_OF_STEPS);
 
         this.jobStatus = JOBSTATUS.INPROGRESS;
@@ -202,8 +172,8 @@ public class BackupJob {
     private void checkFinished(BackupComponentInt component, BackupComponentInt.BackupOperation backupOperation) throws BackupException {
         if (backupOperation != null && backupOperation.status >= 400) {
             this.jobStatus = JOBSTATUS.FAILED;
-            throw new BackupException(CamundaApplicationInt.COMPONENT.ZEEBERECORD,
-                    400,
+            throw new BackupException(component.getComponent(),
+                    backupOperation.status,
                     backupOperation.title,
                     backupOperation.message, backupId);
         }

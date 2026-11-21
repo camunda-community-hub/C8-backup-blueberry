@@ -2,6 +2,7 @@ package io.camunda.blueberry.platform.rule;
 
 
 import io.camunda.blueberry.config.BlueberryConfig;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.OperationResult;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,9 @@ public class RuleZeebeRecordRepository implements Rule {
 
     @Autowired
     ElasticSearchConnect elasticSearchConnect;
+
+    @Autowired
+    OrchestrationParameter orchestrationParameter;
 
     @Override
     public boolean validRule() {
@@ -92,7 +96,7 @@ public class RuleZeebeRecordRepository implements Rule {
             // Third step, create the repository if asked
             if (execute && ruleInfo.inProgress()) {
                 OperationResult operationResult = elasticSearchConnect.createRepository(blueberryConfig.getZeebeRecordRepository(),
-                        blueberryConfig.getZeebeContainerType(),
+                        orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
                         blueberryConfig.getZeebeRecordContainerBasePath());
                 if (operationResult.success) {
                     ruleInfo.addActivity("Repository is created in ElasticSearch", RuleStatus.CORRECT, operationResult.command);
@@ -101,8 +105,7 @@ public class RuleZeebeRecordRepository implements Rule {
                     ruleInfo.setStatus(RuleStatus.FAILED);
                 }
                 ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository()
-                                + "] ContainerType[" + blueberryConfig.getZeebeContainerType()
-                                + "] ContainerName[" + blueberryConfig.getContainerName()
+                                + "] ContainerType[" + orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE)
                                 + "] basePath[" + blueberryConfig.getZeebeRecordContainerBasePath() + "]",
                         operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                         operationResult.command);

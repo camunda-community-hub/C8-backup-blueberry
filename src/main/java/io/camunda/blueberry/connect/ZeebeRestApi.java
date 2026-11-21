@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
@@ -18,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,14 +39,14 @@ public class ZeebeRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(ZeebeRestApi.class);
     private final BlueberryConfig blueberryConfig;
-    private final RestTemplate restTemplate;
+    // Created at the first call (not with the bean)
+    private volatile RestTemplate restTemplate;
     private final CamundaClient camundaClient;
     // The response is read as a String and parsed here: it does not depend on the JSON converters of the RestTemplate
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ZeebeRestApi(BlueberryConfig blueberryConfig, RestTemplate restTemplate, CamundaClient camundaClient) {
+    public ZeebeRestApi(BlueberryConfig blueberryConfig, CamundaClient camundaClient) {
         this.blueberryConfig = blueberryConfig;
-        this.restTemplate = restTemplate;
         this.camundaClient = camundaClient;
     }
 
@@ -55,6 +57,22 @@ public class ZeebeRestApi {
         public boolean isSuccess() {
             return status >= 200 && status < 300;
         }
+    }
+
+    /**
+     * The JDK HTTP client: the default client of the RestTemplate does not accept the method PATCH (PATCH /v2/mode)
+     */
+    private RestTemplate restTemplate() {
+        RestTemplate current = restTemplate;
+        if (current == null) {
+            synchronized (this) {
+                if (restTemplate == null) {
+                    restTemplate = new RestTemplate(new JdkClientHttpRequestFactory());
+                }
+                current = restTemplate;
+            }
+        }
+        return current;
     }
 
     /**
@@ -117,6 +135,46 @@ public class ZeebeRestApi {
     }
 
     /* ******************************************************************** */
+    /*  Restore API (Camunda 8.10)                                          */
+    /* ******************************************************************** */
+
+    /**
+     * Change the mode of the cluster: RECOVERING (the brokers stop processing and wait for the restore) or PROCESSING.
+     * PATCH /v2/mode?mode=RECOVERING answers with a changeId.
+     */
+    public RestResult changeMode(String mode) {
+        return call(HttpMethod.PATCH, "/mode?mode=" + mode, null);
+    }
+
+    /**
+     * Restore the cluster from the backups: POST /v2/restore {"backupIds": [...]} (202: accepted, with a changeId).
+     * With dryRun, the request is only validated.
+     */
+    public RestResult restore(List<Long> backupIds, boolean dryRun) {
+        return call(HttpMethod.POST, "/restore" + (dryRun ? "?dryRun=true" : ""), Map.of("backupIds", backupIds));
+    }
+
+    /**
+     * Status of the restore: IN_PROGRESS, COMPLETED, FAILED, CANCELLED, and the state of each partition. The API answers
+     * 404 when the restore is finished.
+     */
+    public RestResult getRestoreStatus() {
+        return call(HttpMethod.GET, "/restore", null);
+    }
+
+    public RestResult getTopology() {
+        return call(HttpMethod.GET, "/topology", null);
+    }
+
+    /**
+     * The monitoring of the cluster changes (management API of Zeebe): lastChange, pendingChange. It is the way to
+     * know that a change (the mode, the restore) is applied.
+     */
+    public RestResult getClusterChanges() {
+        return callUrl(HttpMethod.GET, blueberryConfig.getZeebeActuatorUrl() + "/actuator/cluster", null);
+    }
+
+    /* ******************************************************************** */
     /*  Call                                                                */
     /* ******************************************************************** */
 
@@ -127,8 +185,14 @@ public class ZeebeRestApi {
      * @param path   path after /v2, with the query
      * @param body   body, null if none
      */
-    RestResult call(HttpMethod method, String path, Object body) {
-        String url = getBaseUrl() + path;
+    public RestResult call(HttpMethod method, String path, Object body) {
+        return callUrl(method, getBaseUrl() + path, body);
+    }
+
+    /**
+     * Call a complete url (the REST API, or the management actuator of Zeebe)
+     */
+    public RestResult callUrl(HttpMethod method, String url, Object body) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
@@ -140,7 +204,7 @@ public class ZeebeRestApi {
         }
         try {
             logger.info("Zeebe REST {} {}", method, url);
-            ResponseEntity<String> response = restTemplate.exchange(url, method, new HttpEntity<>(body, headers), String.class);
+            ResponseEntity<String> response = restTemplate().exchange(url, method, new HttpEntity<>(body, headers), String.class);
             return toResult(response.getStatusCode().value(), response.getBody());
         } catch (HttpStatusCodeException e) {
             logger.warn("Zeebe REST {} {} answered {} {}", method, url, e.getStatusCode().value(), e.getResponseBodyAsString());

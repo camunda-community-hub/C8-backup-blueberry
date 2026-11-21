@@ -11,6 +11,7 @@ import {Button, Modal} from "react-bootstrap";
 
 import RestCallService from "../services/RestCallService";
 import {InlineNotification, CodeSnippet} from "carbon-components-react";
+import {CalendarEvent} from "react-bootstrap-icons";
 
 
 class Scheduler extends React.Component {
@@ -31,7 +32,7 @@ class Scheduler extends React.Component {
       <div className="container">
         <div className="row" style={{width: "100%"}}>
           <div className="col-md-10">
-            <h1 className="title">Restore</h1>
+            <h1 className="title"><CalendarEvent/> Scheduler</h1>
             <InlineNotification kind="info" hideCloseButton="true" lowContrast="false">
               The BlueBerry runtime can be configured to execute a backup at intervalle.
             </InlineNotification>

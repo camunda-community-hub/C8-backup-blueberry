@@ -46,21 +46,18 @@ public record CamundaVersionProfile(
     }
 
     public List<RestorePhase> restorePhases() {
-        if ("8.7".equals(minorVersion)) {
+        if ("8.10".equals(minorVersion)) {
+            // The Restore API: REST only, no Kubernetes, the brokers are not restarted. See RestoreApiExecutor
             return List.of(
-                    RestorePhase.automated("preflight", "Validate the backup completeness and the environment (Kubernetes, Elasticsearch repositories and snapshots)"),
-                    RestorePhase.automated("es_templates_check", "Check that the index templates exist in Elasticsearch"),
-                    RestorePhase.automated("es_templates_create", "Create the missing templates: deploy a process in Zeebe, start an instance, send a signal, and check the templates every 2 seconds (10 times)"),
-                    RestorePhase.automated("zeebe_scale_down", "Stop Operate, Tasklist, Optimize, the gateway, and Zeebe"),
-                    RestorePhase.automated("es_templates", "Start components so they create index templates, then stop them again"),
-                    RestorePhase.automated("es_delete_indices", "Delete Camunda indices"),
-                    RestorePhase.automated("es_snapshots", "Restore full Elasticsearch snapshots with no index filter"),
-                    RestorePhase.automated("zeebe_delete_volumes", "Delete Zeebe persistent volume claims"),
-                    RestorePhase.automated("zeebe_broker_restore", "Restore Zeebe brokers with ZEEBE_RESTORE"),
-                    RestorePhase.automated("zeebe_scale_up", "Remove ZEEBE_RESTORE and start the other components"),
-                    RestorePhase.automated("cluster_restarted", "Cluster restarted: wait until Zeebe and the other components are ready")
+                    RestorePhase.automated("validate", "Validate the backup (Zeebe, secondary storage) and the cluster (REST API, Optimize stopped)"),
+                    RestorePhase.automated("recovery_mode", "Recovery mode: PATCH /v2/mode?mode=RECOVERING"),
+                    RestorePhase.automated("secondary_storage", "Restore the secondary storage (Elasticsearch: dry run, delete the indices, restore the snapshots; a database: its native restore)"),
+                    RestorePhase.automated("zeebe_restore", "Restore Zeebe: POST /v2/restore, then GET /v2/restore until it is finished"),
+                    RestorePhase.automated("processing", "The cluster leaves the recovery mode: GET /v2/topology")
             );
         }
+        // The other versions (8.7, 8.8, 8.9): the restore is described, not executed. The automated restore of 8.7
+        // (Kubernetes, PwC runbook) is in the branch pr-54.
         String doc = docsRestoreUrl;
         return List.of(
                 RestorePhase.automated("preflight", "Validate backup completeness"),

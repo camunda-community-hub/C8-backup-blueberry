@@ -23,7 +23,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.StreamSupport;
@@ -39,7 +41,6 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     private final ZeebeRestApi zeebeRestApi;
     private final SecondaryStorageDetector secondaryStorageDetector;
     Logger logger = LoggerFactory.getLogger(ZeebeConnect.class);
-    private ZeebeClient myZeebeClient;
     private long lastTentativeConnection = 0;
 
     /**
@@ -134,19 +135,6 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
         if (System.currentTimeMillis() - lastTentativeConnection < 5000)
             return false;
         return connection();
-    }
-
-    /**
-     * Return the connected Zeebe client, to send commands (deploy a process, start an instance...)
-     *
-     * @throws OperationException if Zeebe is not reachable
-     */
-    public ZeebeClient getConnectedZeebeClient() throws OperationException {
-        if (!activateConnection()) {
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.NO_ZEEBE_CONNECTION,
-                    "No connection to Zeebe", "Connection is not established to Zeebe");
-        }
-        return myZeebeClient;
     }
 
     /**

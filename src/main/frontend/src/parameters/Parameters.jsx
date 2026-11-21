@@ -8,7 +8,7 @@
 
 import React from 'react';
 import {Button, InlineNotification, TextInput} from "carbon-components-react";
-import {ArrowRepeat} from "react-bootstrap-icons";
+import {ArrowRepeat, Sliders} from "react-bootstrap-icons";
 import RestCallService from "../services/RestCallService";
 import RepositoryTable from "../component/RepositoryTable";
 
@@ -48,7 +48,7 @@ class Parameters extends React.Component {
             <div className={"container"}>
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-10">
-                        <h1 className="title">Parameters</h1>
+                        <h1 className="title"><Sliders/> Parameters</h1>
 
                     </div>
                 </div>
@@ -129,25 +129,6 @@ class Parameters extends React.Component {
                             readOnly
                         />
                     </div>
-                </div>
-                <div className="row" style={{marginTop: "10px"}}>
-                    <div className="col-md-2">
-                        <TextInput
-                            id="kubeConfig"
-                            labelText="kubeConfig"
-                            value={this.state.parameters.kubeConfig}
-                            readOnly
-                        />
-                    </div>
-                    <div className="col-md-2">
-                        <TextInput
-                            id="namespace"
-                            labelText="namespace"
-                            value={this.state.parameters.namespace}
-                            readOnly
-                        />
-                    </div>
-
                 </div>
                 <div className="row" style={{marginTop: "10px"}}>
                     <h1>Repositories</h1>

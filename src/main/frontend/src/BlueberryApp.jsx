@@ -47,7 +47,9 @@ class BlueberryApp extends React.Component {
       camundaVersion: "8.7",
       supportedMinors: ["8.7", "8.8", "8.9", "8.10"],
       docsBackupUrl: "",
-      docsRestoreUrl: ""
+      docsRestoreUrl: "",
+      // The version of Blueberry: given by the REST API blueberry/api/version (the pom.xml), not written here
+      blueberryVersion: ""
     };
     this.clickMenu = this.clickMenu.bind(this);
     this.onVersionChange = this.onVersionChange.bind(this);
@@ -66,7 +68,8 @@ class BlueberryApp extends React.Component {
           camundaVersion: minor,
           supportedMinors: data.supportedMinors || this.state.supportedMinors,
           docsBackupUrl: data.docsBackupUrl,
-          docsRestoreUrl: data.docsRestoreUrl
+          docsRestoreUrl: data.docsRestoreUrl,
+          blueberryVersion: data.blueberryVersion || ""
         });
         if (stored && stored !== data.minorVersion) {
           this.syncVersionToServer(stored);
@@ -109,7 +112,8 @@ class BlueberryApp extends React.Component {
             <Nav className="mr-auto">
               <Navbar.Brand href="#home">
                 <img src="/img/blueberry.png" width="28" height="28" alt="Blueberry"/>
-                &nbsp;Blueberry Backup <span style={{fontSize: "0.7rem"}}>v2.0.0</span>
+                &nbsp;Blueberry Backup {this.state.blueberryVersion &&
+                <span style={{fontSize: "0.7rem"}}>v{this.state.blueberryVersion}</span>}
               </Navbar.Brand>
 
               <Nav.Link onClick={() => {

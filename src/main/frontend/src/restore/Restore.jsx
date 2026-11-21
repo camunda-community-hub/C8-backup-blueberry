@@ -12,7 +12,7 @@ import BackupListTable from "../component/BackupListTable";
 import RepositoryTable from "../component/RepositoryTable";
 import {renderOperationLogMessages} from "../component/OperationLogMessages";
 import {Button, InlineNotification, Tag} from "carbon-components-react";
-import {ArrowRepeat} from "react-bootstrap-icons";
+import {ArrowRepeat, DatabaseDown} from "react-bootstrap-icons";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import {Card, Modal} from "react-bootstrap";
@@ -100,7 +100,7 @@ class Restore extends React.Component {
         if (this.state.readinessLoading) {
             return (
                 <InlineNotification kind="info" hideCloseButton="true" lowContrast="true" style={{marginTop: "8px"}}>
-                    Checking restore readiness (Kubernetes, Elasticsearch, workloads)...
+                    Checking restore readiness (REST API of the cluster, secondary storage)...
                 </InlineNotification>
             );
         }
@@ -132,7 +132,7 @@ class Restore extends React.Component {
                         Open Configuration
                     </Button>}
                 {!this.props.onOpenConfiguration &&
-                    <span> Use <strong>Configuration</strong> in the top navigation to fix Kubernetes and actuator rules.</span>}
+                    <span> Use <strong>Configuration</strong> in the top navigation to fix the actuator rules.</span>}
             </InlineNotification>
         );
     }
@@ -142,11 +142,11 @@ class Restore extends React.Component {
             <div className={"container"}>
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-10">
-                        <h1 className="title">Restore</h1>
+                        <h1 className="title"><DatabaseDown/> Restore</h1>
                         <InlineNotification kind="warning" hideCloseButton="true" lowContrast="false">
-                            {this.state.procedure === "pwc-8.7"
-                                ? "Camunda 8.7 restore stops the cluster, deletes Camunda indices, deletes Zeebe volumes, and restores the selected backup. Live restore is off until blueberry.restore.execution is true."
-                                : "Automated restore is available for Camunda 8.7. Select 8.7 to use the PwC restore procedure."}
+                            {this.state.procedure === "restore-api-8.10"
+                                ? "Camunda 8.10 restore uses the Restore API (REST): the cluster goes in recovery mode, the secondary storage is deleted and restored, then Zeebe is restored. The cluster is out of service. Live restore is off until blueberry.restore.execution is true."
+                                : "Automated restore is available for Camunda 8.10 (Restore API). Select 8.10, or follow the documentation of your version."}
                         </InlineNotification>
                         {this.renderReadinessBanner()}
                         {this.state.status &&

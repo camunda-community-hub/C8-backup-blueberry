@@ -21,18 +21,21 @@
         <!-- version in https://central.sonatype.com/artifact/io.camunda.connector/connector-validation/versions -->
         <!--Version 8.3.0-->
         <!-- 8.6.3 -->
-        <version.zeebe>8.9.26</version.zeebe>
+        <!-- 8.9.26 -->
+        <version.camunda>8.10.10</version.camunda>
+
+
+
         <!--Version 8.3.3-->
         <!-- <version.zeebe-client>8.5.5</version.zeebe-client> -->
         <!--Version 8.3.1-->
-
+<!--
         <version.operate-client>8.6.2</version.operate-client>
-
+-->
         <!-- 2.7.4 -->
         <!-- According https://github.com/camunda-community-hub/spring-zeebe/blob/main/pom.xml -->
         <version.spring.boot>4.1.0</version.spring.boot>
 
-        <version.junit.jupiter>5.12.1</version.junit.jupiter>
         <version.opensagres>2.0.3</version.opensagres>
 
     </properties>
@@ -62,16 +65,12 @@
 
     <dependencies>
 
+        <!-- The Camunda Spring Boot starter: the CamundaClient bean (camunda.client.* properties).
+             Since 8.8 it replaces spring-boot-starter-camunda-sdk, which does not exist for 8.10. -->
         <dependency>
             <groupId>io.camunda</groupId>
             <artifactId>camunda-spring-boot-starter</artifactId>
-            <version>${version.zeebe}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>io.camunda</groupId>
-            <artifactId>spring-boot-starter-camunda-sdk</artifactId>
-            <version>${version.zeebe}</version>
+            <version>${version.camunda}</version>
         </dependency>
 
 
@@ -130,21 +129,6 @@
 
         <!-- https://mvnrepository.com/artifact/com.h2database/h2 -->
 
-        <dependency>
-            <groupId>io.fabric8</groupId>
-            <artifactId>kubernetes-client</artifactId>
-            <version>7.1.0</version>  <!-- Use the latest version -->
-        </dependency>
-
-
-
-        <!-- Docker -->
-        <dependency>
-            <groupId>com.github.docker-java</groupId>
-            <artifactId>docker-java</artifactId>
-            <version>3.5.1</version>
-        </dependency>
-
 
         <!-- tests -->
         <dependency>
@@ -153,16 +137,11 @@
             <version>8.1.3</version>
             <scope>test</scope>
         </dependency>
+        <!-- JUnit: the version is managed by the Spring Boot BOM, so the API, the engine and the platform have the same version
+             (the pins 5.12.1 and 1.12.1 were mixed with the JUnit 6 of Spring Boot 4) -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-engine</artifactId>
-            <version>${version.junit.jupiter}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <version>${version.junit.jupiter}</version>
+            <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -245,13 +224,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.3</version>
-                <dependencies>
-                    <dependency>
-                        <groupId>org.junit.platform</groupId>
-                        <artifactId>junit-platform-surefire-provider</artifactId>
-                        <version>1.3.2</version>
-                    </dependency>
-                </dependencies>
+                <!-- No provider is declared here: surefire chooses its own JUnit Platform provider.
+                     junit-platform-surefire-provider 1.3.2 is the provider of surefire 2.x, it breaks the forked JVM
+                     (NoClassDefFoundError: org/apache/maven/surefire/report/RunModeSetter) -->
             </plugin>
 
 

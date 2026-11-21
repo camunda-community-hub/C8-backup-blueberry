@@ -1,0 +1,65 @@
+package io.camunda.blueberry.platform.componentconfig;
+
+import io.camunda.blueberry.config.BlueberryConfig;
+import org.junit.jupiter.api.Test;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.StandardEnvironment;
+
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+class OrchestrationParameterTest {
+
+    private static final Map<String, Object> CONFIG = Map.of(
+            "blueberry.orchestrationConfig.container.containerType", "gcs",
+            "blueberry.orchestrationConfig.backupSchedule", "PT10M",
+            "blueberry.orchestrationConfig.backupRetentionWindow", "P7D");
+
+    private static OrchestrationParameter build(AccessActuator.Result actuatorAnswer) {
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().addFirst(new MapPropertySource("test", CONFIG));
+        AccessActuator actuator = new AccessActuator(new BlueberryConfig(), null) {
+            @Override
+            public Result readEnvironment(Map<String, List<String>> wanted) {
+                return actuatorAnswer;
+            }
+        };
+        OrchestrationParameter parameters = new OrchestrationParameter(new BlueberryConfig(), actuator, environment);
+        parameters.refresh();
+        return parameters;
+    }
+
+    @Test
+    void actuatorFirstThenConfiguration() {
+        OrchestrationParameter parameters = build(new AccessActuator.Result(true, false,
+                Map.of("container.containerType", "FILESYSTEM", "backupContinuous", "true"), ""));
+
+        assertEquals("FILESYSTEM", parameters.getParameterValue("container.containerType"));
+        assertEquals("true", parameters.getParameterValue("backupContinuous"));
+        // not given by the actuator: the application.yaml
+        assertEquals("PT10M", parameters.getParameterValue("backupSchedule"));
+        // given by nobody
+        assertNull(parameters.getParameterValue("backupCheckpointInterval"));
+
+        OrchestrationParameter.Parameter store = parameters.getParameters().stream()
+                .filter(p -> p.getName().equals("container.containerType")).findFirst().orElseThrow();
+        assertEquals(OrchestrationParameter.Parameter.Origin.ACTUATOR, store.getOrigin());
+        assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, parameters.getParameters().stream()
+                .filter(p -> p.getName().equals("backupSchedule")).findFirst().orElseThrow().getOrigin());
+        // one parameter for each variable searched
+        assertEquals(OrchestrationParameter.ENVIRONMENT.size(), parameters.getParameters().size());
+        assertNull(parameters.getParameterValue("unknown"));
+    }
+
+    @Test
+    void actuatorNotReachableUsesTheConfiguration() {
+        OrchestrationParameter parameters = build(new AccessActuator.Result(false, false, Map.of(), "not exposed"));
+
+        assertEquals("gcs", parameters.getParameterValue("container.containerType"));
+        assertEquals("P7D", parameters.getParameterValue(OrchestrationParameter.BACKUP_RETENTION_WINDOW));
+        parameters.getParameters().forEach(p -> assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, p.getOrigin()));
+    }
+}

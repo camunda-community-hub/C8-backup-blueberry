@@ -13,6 +13,7 @@ import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.ElasticsearchException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.operation.restoration.ElasticsearchRestoreApi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,11 +44,80 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     private RestTemplate restTemplate; // Injected instance
 
     private final ZeebeRestApi zeebeRestApi;
+    private final ElasticsearchRestoreApi elasticsearchRestoreApi;
 
-    public ElasticSearchConnect(BlueberryConfig blueberryConfig, ContainerFactory containerFactory, ZeebeRestApi zeebeRestApi) {
+    public ElasticSearchConnect(BlueberryConfig blueberryConfig, ContainerFactory containerFactory, ZeebeRestApi zeebeRestApi,
+                                ElasticsearchRestoreApi elasticsearchRestoreApi) {
         this.blueberryConfig = blueberryConfig;
         this.containerFactory = containerFactory;
         this.zeebeRestApi = zeebeRestApi;
+        this.elasticsearchRestoreApi = elasticsearchRestoreApi;
+    }
+
+    /* ******************************************************************** */
+    /*  Restore (Camunda 8.10 Restore API: the cluster is in recovery mode) */
+    /* ******************************************************************** */
+
+    @Override
+    public boolean supportsRestore() {
+        return true;
+    }
+
+    /**
+     * The snapshots of the backup, and the index templates: nothing is changed
+     */
+    @Override
+    public void checkRestorable(long backupId, OperationLog operationLog) throws OperationException {
+        List<ElasticsearchSnapshotPlan.Planned> plan = planSnapshots(backupId);
+        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Elasticsearch: " + plan.size() + " snapshots found for the backup "
+                + backupId + ": " + plan.stream().map(ElasticsearchSnapshotPlan.Planned::name).toList());
+
+        // The restore does not recreate the templates: Camunda creates them when it starts on an empty datastore
+        List<String> templates = elasticsearchRestoreApi.listIndexTemplateNames();
+        boolean hasTemplates = templates.stream().anyMatch(t -> t.toLowerCase(Locale.ROOT).contains("zeebe-record"))
+                && templates.stream().anyMatch(t -> {
+            String name = t.toLowerCase(Locale.ROOT);
+            return name.contains("operate") || name.contains("tasklist") || name.contains("camunda");
+        });
+        if (!hasTemplates) {
+            throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Index templates missing",
+                    "The index templates of Zeebe, Operate or Tasklist are not in Elasticsearch. On a new Elasticsearch, start Camunda "
+                            + "once so it creates them (curl -s " + elasticsearchRestoreApi.baseUrl() + "/_index_template), then restore.");
+        }
+    }
+
+    /**
+     * Procedure of the documentation (steps 3c and 3d): delete the indices of Camunda, then restore each snapshot
+     */
+    @Override
+    public void restore(long backupId, OperationLog operationLog) throws OperationException {
+        List<ElasticsearchSnapshotPlan.Planned> plan = planSnapshots(backupId);
+
+        for (String index : elasticsearchRestoreApi.listIndices()) {
+            if (ElasticsearchSnapshotPlan.isCamundaIndex(index)) {
+                operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Delete the index " + index);
+                elasticsearchRestoreApi.deleteIndex(index);
+            }
+        }
+        for (ElasticsearchSnapshotPlan.Planned snapshot : plan) {
+            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Restore the snapshot " + snapshot.name()
+                    + " from the repository " + snapshot.repository());
+            elasticsearchRestoreApi.restoreSnapshot(snapshot.repository(), snapshot.name());
+        }
+    }
+
+    /**
+     * The snapshots of the backup, searched in the repositories of Blueberry
+     */
+    List<ElasticsearchSnapshotPlan.Planned> planSnapshots(long backupId) throws OperationException {
+        Map<String, List<String>> namesPerRepository = new LinkedHashMap<>();
+        for (String repository : Arrays.asList(blueberryConfig.getZeebeRecordRepository(),
+                blueberryConfig.getOptimizeRepository(), blueberryConfig.getZeebeRepository())) {
+            if (repository != null && !repository.isBlank() && !namesPerRepository.containsKey(repository)) {
+                namesPerRepository.put(repository, elasticsearchRestoreApi.listSnapshotNames(repository));
+            }
+        }
+        return ElasticsearchSnapshotPlan.plan(backupId, namesPerRepository);
     }
 
     public OperationResult connection() {
@@ -99,8 +169,8 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
 
             JsonNode jsonNode = response.getBody();
             // is a repository is defined?
-            String containerType = jsonNode == null ? null : jsonNode.path("operaterepository").path("type").asText();
-            String containerUuid = jsonNode == null ? null : jsonNode.path("operaterepository").path("uuid").asText();
+            String containerType = jsonNode == null ? null : jsonNode.path(repositoryName).path("type").asText();
+            String containerUuid = jsonNode == null ? null : jsonNode.path(repositoryName).path("uuid").asText();
             operationResult.details = " ContainerType[" + containerType + "] uuid[" + containerUuid + "]";
 
             operationResult.resultBoolean = true;
@@ -142,6 +212,13 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
         if (container == null) {
             operationResult.success = false;
             operationResult.details = "Can't find container [" + containerType + "]";
+            return operationResult;
+        }
+
+        String configurationProblem = container.getConfigurationProblem();
+        if (configurationProblem != null) {
+            operationResult.success = false;
+            operationResult.details = "Can't create the repository [" + repositoryName + "]: " + configurationProblem;
             return operationResult;
         }
 

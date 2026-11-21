@@ -41,11 +41,11 @@ public class RestoreRestController {
         List<Map<String, Object>> phaseMaps = restorationManager.phasesForActiveVersion().stream()
                 .map(this::phaseToMap)
                 .collect(Collectors.toList());
-        boolean pwc87 = phaseMaps.stream().anyMatch(phase -> "zeebe_delete_volumes".equals(phase.get("id")));
+        boolean restoreApi = phaseMaps.stream().anyMatch(phase -> "recovery_mode".equals(phase.get("id")));
         Map<String, Object> result = new HashMap<>();
         result.put("phases", phaseMaps);
         result.put("executionEnabled", restorationManager.isLiveRestoreEnabled());
-        result.put("procedure", pwc87 ? "pwc-8.7" : "manual");
+        result.put("procedure", restoreApi ? "restore-api-8.10" : "manual");
         return result;
     }
 

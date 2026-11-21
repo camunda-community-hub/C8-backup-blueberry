@@ -152,6 +152,10 @@ public class BackupManager {
         return listBackupResult;
     }
 
+    /**
+     * For each backup, which components have it, and does it have all the active components (Zeebe, the secondary
+     * storage, Optimize): used by the dashboard, the backup list and the preflight of the restore
+     */
     public List<BackupCompleteness.Detail> getBackupCompletenessDetails() throws OperationException {
         ListBackupResult listBackupResult = getListBackups();
         var required = BackupCompleteness.requiredActiveComponents(listBackupComponents);

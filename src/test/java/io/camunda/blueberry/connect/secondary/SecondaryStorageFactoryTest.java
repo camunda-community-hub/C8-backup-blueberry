@@ -61,20 +61,7 @@ class SecondaryStorageFactoryTest {
      * Zeebe answers the /actuator/env with the given JSON (null: the call fails)
      */
     private static SecondaryStorageDetector detector(String configured, String envJson) {
-        BlueberryConfig config = new BlueberryConfig();
-        TestFields.set(config, "secondaryStorage", configured);
-        TestFields.set(config, "zeebeActuatorUrl", "http://zeebe:9600");
-        RestTemplate restTemplate = new RestTemplate() {
-            @Override
-            @SuppressWarnings("unchecked")
-            public <T> T getForObject(String url, Class<T> responseType, Object... uriVariables) {
-                if (envJson == null) {
-                    throw new RestClientException("404");
-                }
-                return (T) envJson;
-            }
-        };
-        return new SecondaryStorageDetector(config, restTemplate);
+        return TestDetector.detector(configured, envJson);
     }
 
     private static final String ENV_ELASTICSEARCH = "{\"propertySources\":[{\"name\":\"systemEnvironment\",\"properties\":{"

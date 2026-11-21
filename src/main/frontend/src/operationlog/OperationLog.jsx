@@ -8,7 +8,7 @@
 
 import React from 'react';
 import {Button} from "carbon-components-react";
-import {ArrowRepeat, XCircle} from "react-bootstrap-icons";
+import {ArrowRepeat, JournalText, XCircle} from "react-bootstrap-icons";
 import RestCallService from "../services/RestCallService";
 
 class OperationLog extends React.Component {
@@ -35,7 +35,7 @@ class OperationLog extends React.Component {
       <div className={"container"}>
         <div className="row" style={{width: "100%"}}>
           <div className="col-md-4">
-            <h1 className="title">Operations Log</h1>
+            <h1 className="title"><JournalText/> Operations Log</h1>
           </div>
           <div className="col-md-6">
             <button className={this.getButtonClass(this.state.display.showOnlyError)}

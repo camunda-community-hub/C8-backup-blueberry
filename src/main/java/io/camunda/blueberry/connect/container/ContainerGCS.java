@@ -1,16 +1,16 @@
 package io.camunda.blueberry.connect.container;
 
-import io.camunda.blueberry.config.BlueberryConfig;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ContainerGCS implements Container {
 
     public static final String GCS = "gcs";
-    private final BlueberryConfig blueberryConfig;
+    private final OrchestrationParameter orchestrationParameter;
 
-    public ContainerGCS(BlueberryConfig blueberryConfig) {
-        this.blueberryConfig = blueberryConfig;
+    public ContainerGCS(OrchestrationParameter orchestrationParameter) {
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     @Override
@@ -20,7 +20,7 @@ public class ContainerGCS implements Container {
 
     @Override
     public String getElasticsearchPayload(String basePathInsideContainer) {
-        String bucket = blueberryConfig.getGcsBucket();
+        String bucket = orchestrationParameter.getParameterString(OrchestrationParameter.GCS_BUCKETNAME);
 
         return String.format("""
                 {
@@ -36,7 +36,7 @@ public class ContainerGCS implements Container {
 
     @Override
     public String getInformation() {
-        String bucket = blueberryConfig.getGcsBucket();
+        String bucket = orchestrationParameter.getParameterString(OrchestrationParameter.GCS_BUCKETNAME);
         return "Container type[" + GCS + "] bucket[" + bucket + "]";
     }
 }

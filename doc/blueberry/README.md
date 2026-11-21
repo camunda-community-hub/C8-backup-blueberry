@@ -92,65 +92,63 @@ Each row shows backup ID, time, status, and components.
 2. Read the preflight result in the confirm dialog.
 3. Click **Start restore** only when live restore is enabled.
 
-For Camunda **8.7**, Start restore follows the PwC 8.7 runbook:
+For Camunda **8.10**, Start restore uses the **Restore API**: everything goes through the REST API of the cluster. There is no Kubernetes,
+and the brokers are not restarted
+([Elasticsearch](https://docs.camunda.io/docs/next/self-managed/operational-guides/backup-restore/elasticsearch/es-restore-api/),
+[RDBMS](https://docs.camunda.io/docs/next/self-managed/operational-guides/backup-restore/rdbms/rdbms-restore-api/)).
+The cluster is out of service during the restore.
 
-1. Validate the backup and the environment, before any change. Blueberry checks that the Camunda workloads exist in Kubernetes,
-   that Zeebe has replicas, and that Elasticsearch answers. It reads the snapshots of the backup ID in the repository of each component,
-   and checks that every component has a complete set of snapshots. If something is missing, the restore stops with the way to check it
-   (`curl` commands): nothing has been stopped or deleted.
-2. Check that Elasticsearch has index templates for operate, tasklist and zeebe (the composable and the legacy templates are both read).
-   Optimize is not checked: it creates its own indices, and only some of them have templates. If the templates exist, go to the next step.
-3. Create the missing templates. Blueberry deploys a process in Zeebe (start event, signal catch event, end event), creates one instance,
-   and sends the signal. The process id and the signal name are random, like `blueberry_434243535434`.
-   Then it checks the templates every 2 seconds, up to 10 times. If a template is still missing, the restore stops with the list of the
-   missing ones and the `curl` commands to check them. Nothing has been stopped or deleted yet.
-4. Stop Operate, Tasklist, Optimize, the Zeebe gateway, and Zeebe. Elasticsearch stays up.
-5. Start the components once so they create index templates, then stop them again.
-6. Delete indices whose names contain operate, tasklist, optimize, or zeebe.
-7. Restore each snapshot for that backup ID. The request has no index filter.
-8. Delete Zeebe persistent volume claims.
-9. Set `ZEEBE_RESTORE=true` and `ZEEBE_RESTORE_FROM_BACKUP_ID` on the Zeebe StatefulSet, then scale the brokers up.
-   With `ZEEBE_RESTORE=true`, the main container of each broker runs the restore, then exits: Kubernetes starts it again, the restore
-   finds a data directory which is not empty, and aborts, again and again, until the variable is removed (step 10).
-   The log of the first run is lost after a restart, so Blueberry watches every broker at the same time (one thread per broker, current
-   and previous run of the container) and accepts one of two messages. The log of the restore tells which one it detected:
-   * `Successfully restored broker from backup`: the restore was seen.
-   * `... is not empty. Aborting restore to avoid overwriting data`: the container restarted after a first restore, which wrote the
-     data. The restore of this broker is considered successful.
+1. Validate, before any change: the REST API answers, the Zeebe backup (`GET /v2/backups/runtime/{id}`) is `COMPLETED`, and the secondary
+   storage has the backup (Elasticsearch: the snapshots `camunda_webapps_{id}_..._part_k_of_n`, `camunda_zeebe_records_backup_{id}`, and the
+   index templates; a database: the backup file or the backup of the history). With Elasticsearch, **Optimize must be stopped**: the REST API
+   can't stop it. Blueberry refuses to start while Optimize answers.
+2. Recovery mode: `PATCH /v2/mode?mode=RECOVERING`. Blueberry waits until the partitions are in recovery mode.
+3. Restore the secondary storage, the cluster stays in recovery mode.
+   * Elasticsearch: a dry run of the restore of Zeebe (`POST /v2/restore?dryRun=true`), so nothing is deleted if Zeebe would refuse it. Then
+     delete the indices (camunda, operate, tasklist, optimize, zeebe) and restore the snapshots one by one.
+   * A database (PostgreSQL, SQL Server): the restore with the native tool of the database. Camunda has no API for it.
+4. Restore Zeebe: `POST /v2/restore {"backupIds": [id]}` (for a database, after a dry run: Zeebe reads the exporter position in the restored
+   database), then `GET /v2/restore` until it is finished.
+5. The cluster leaves the recovery mode by itself. Blueberry checks `GET /v2/topology`.
 
-   If a broker logs none of them in the time allowed (`blueberry.restore.zeebeRestoreTimeoutSeconds`), the restore stops with the list of
-   the brokers not detected.
-10. Remove those variables, start the other components, and restart Zeebe.
-11. Cluster restarted: wait until the Zeebe brokers (`blueberry.restore.zeebeRestoreTimeoutSeconds`) and the other components are ready.
-    The restore is finished, and its status changes, only after this step.
+If the restore fails before something is deleted, the cluster is put back in `PROCESSING` mode. After, it stays in recovery mode: fix the
+cause, and start the restore again. Never start a partially restored cluster.
+After the restore, check the data in Operate and Tasklist, and start Optimize.
 
-The restore must then be validated manually: open Operate, Tasklist and Optimize, check the data from the backup time, and start one test process.
+Parameters: the REST API is `camunda.client.zeebe.restAddress` (or `blueberry.zeebeRestUrl`), with the basic authentication
+`camunda.client.auth.username` and `password` (or `blueberry.zeebeRestUsername` and `blueberry.zeebeRestPassword`). The user needs the
+permissions BACKUP and RESTORE. The time allowed is `blueberry.restore.zeebeRestoreTimeoutSeconds`.
 
-The templates are created by Operate and Tasklist when they start. Zeebe creates its templates when its exporter exports records:
-this is why step 3 deploys a process.
+#### Secondary storage
 
-Live restore stays off until `blueberry.restore.execution` is `true`.
-Restore uses the **Kubernetes API** (Fabric8) and **Elasticsearch HTTP** — not shell scripts or simulated steps.
-Set `blueberry.kubeConfig` when Blueberry runs outside the cluster.
+`blueberry.orchestrationConfig.secondaryStorage` gives the secondary storage when Blueberry can't detect it on the cluster.
 
-If your kubeconfig includes **GKE** (`gke-gcloud-auth-plugin`) and **local** clusters (kind, Docker Desktop),
-set `blueberry.kubeContext` to the cluster you want (for example `kind-camunda-platform-local`). Blueberry uses
-that context instead of whatever is selected in `kubectl config current-context`.
+| Value                | Backup                                                       | Restore                                         |
+|----------------------|--------------------------------------------------------------|-------------------------------------------------|
+| `elasticsearch`      | History backup (`POST /v2/backups/history`), then the snapshot of the Zeebe records | Delete the indices, restore the snapshots |
+| `postgres`           | `pg_dump` (custom format) in `blueberry.postgres.backupDirectory` | `pg_restore --clean --single-transaction`  |
+| `sqlserver`          | `BACKUP DATABASE` (T-SQL, by JDBC)                           | `RESTORE DATABASE ... WITH REPLACE`             |
 
-On startup, Fabric8 may log `Error unmarshalling ExecCredential` when the GKE plugin returns non-JSON output
-(expired `gcloud` login, plugin not on `PATH` for the JVM, or wrong context). That is usually a **WARN**, not a
-crash. Fix GKE auth with:
+PostgreSQL has no SQL command to back up, list or restore: Blueberry runs `pg_dump` and `pg_restore`, which must be installed where Blueberry
+runs (the Docker image of Blueberry, or the package `postgresql-client`). The password is given by the environment variable `PGPASSWORD`.
 
-```shell
-gcloud auth login
-gcloud container clusters get-credentials YOUR_CLUSTER --region YOUR_REGION
-kubectl get nodes
-which gke-gcloud-auth-plugin
+```yaml
+blueberry:
+  secondaryStorage: postgres
+  postgres:
+    host: localhost
+    port: 5432
+    database: camunda
+    username: camunda
+    password: ...
+    backupDirectory: /backups/postgres   # a directory of the machine where Blueberry runs
 ```
 
-Ensure the same `PATH` is visible to the process that starts Blueberry (IDE run configuration or terminal).
-Check `GET /blueberry/api/restore/readiness` before you start.
-The Helm release default is `camunda87helm` in namespace `camunda`.
+The restore of Camunda 8.7 (the PwC runbook with Kubernetes: stop the components, delete the volumes, `ZEEBE_RESTORE`) is not in the 2.0 branch.
+It needs Operate and Tasklist, which are part of the orchestration cluster since 8.8. It stays in the branch `pr-54` (Blueberry 1.4).
+
+Live restore stays off until `blueberry.restore.execution` is `true`.
+
 The restore reads the snapshots in the **same repositories as the backup**: `operateRepository`, `tasklistRepository`,
 `optimizeRepository` and `elasticsearch.zeebeRecordRepository` of the Blueberry configuration. There is no separate restore repository.
 `GET /blueberry/api/configuration/repositories` returns, for each component, the repository of the configuration and the repository read
@@ -185,174 +183,25 @@ The **Restore** button stays disabled when the backup is partial or incomplete.
 
 
 #### Configuration needed for the restore
-The blueberry application needs to be configured with the following parameters in order to perform a restore. It needs to access the Kubernetes API,
-to scale the Camunda components down and up, and Elasticsearch, to restore the snapshots.
+The Restore API needs no Kubernetes: Blueberry calls the REST API of the cluster and the secondary storage. It needs these parameters.
 
 ##### Parameters
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
-| `blueberry.kubeConfig` | empty | Path to a kubeconfig file. Needed when Blueberry runs **outside** the cluster. Leave it empty when Blueberry runs inside the cluster. |
-| `blueberry.namespace` | `camunda` | Kubernetes namespace of the Camunda platform |
-| `blueberry.restore.helmRelease` | `camunda87helm` | Helm release name. The deployments are named `<release>-operate`, `<release>-tasklist`... Use the release name given by `helm list -n camunda`. |
+| `camunda.client.zeebe.restAddress` | `http://localhost:8080` | REST API of the cluster (`/v2/mode`, `/v2/restore`). Or `blueberry.zeebeRestUrl`. |
+| `camunda.client.auth.username`, `password` | empty | Basic authentication of the REST API. The user needs the permissions BACKUP and RESTORE. |
+| `blueberry.orchestrationConfig.secondaryStorage` | detected | `elasticsearch`, `postgres` or `sqlserver`, when the cluster does not give it |
 | `blueberry.restore.execution` | `false` | Live restore stays off until this is `true` |
 | `blueberry.elasticsearchurl` | `http://localhost:9200` | Elasticsearch used to restore the snapshots |
 
-Check the connection with `GET /blueberry/api/restore/readiness` before starting a restore.
-
-##### How Blueberry connects to Kubernetes
-
-Blueberry uses the Kubernetes client (Fabric8). It chooses the configuration in this order:
-
-1. `blueberry.kubeConfig`, if it is set: Blueberry reads this kubeconfig file.
-2. Else the default configuration of the client: the `KUBECONFIG` variable, then `~/.kube/config`, then the **in-cluster** configuration.
-
-**Blueberry runs inside the cluster (container image)**
-
-Nothing is needed on the container: no kubeconfig, no `gcloud`. The client uses the token of the service account of the pod,
-mounted in `/var/run/secrets/kubernetes.io/serviceaccount`. Keep `blueberry.kubeConfig` empty.
-
-The service account needs the right to read and change the Camunda workloads in the namespace. Example:
-
-```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: blueberry
-  namespace: camunda
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "persistentvolumeclaims"]
-    verbs: ["get", "list", "delete"]
-  - apiGroups: ["apps"]
-    resources: ["deployments", "statefulsets", "deployments/scale", "statefulsets/scale"]
-    verbs: ["get", "list", "patch", "update"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: blueberry
-  namespace: camunda
-subjects:
-  - kind: ServiceAccount
-    name: blueberry
-    namespace: camunda
-roleRef:
-  kind: Role
-  name: blueberry
-  apiGroup: rbac.authorization.k8s.io
-```
-
-The service account name (`blueberry` here) must be the one used by the Blueberry pod.
-
-**Blueberry runs outside the cluster (laptop, IDE)**
-
-Blueberry needs a kubeconfig that works for the cluster. Verify it first, from the same machine and the same shell
-as the one running Blueberry:
-
-```bash
-kubectl config current-context
-kubectl -n camunda get deployments
-helm list -n camunda
-```
-
-If these commands work, Blueberry can use the same kubeconfig. Set it when it is not the default one:
-
-```yaml
-blueberry:
-  kubeConfig: /Users/you/.kube/config
-  restore:
-    helmRelease: camunda        # the name given by helm list
-```
-
-The deployments listed by `kubectl -n camunda get deployments` must be named `<helmRelease>-operate`, `<helmRelease>-tasklist`, ...
-If you see `camunda-operate`, the release is `camunda`. A wrong release name gives a "not found" error on the deployment.
-
-##### Google Cloud (GKE): access to the cluster
-
-A GKE kubeconfig does not contain a token. It asks the tool `gke-gcloud-auth-plugin` to get a token from your Google login.
-Without this tool, the connection is refused.
-
-*1. Install the Google Cloud CLI and the plugin*
-
-```bash
-gcloud components install gke-gcloud-auth-plugin
-```
-
-Check that the plugin is found, and that the folder of the plugin is in the `PATH`:
-
-```bash
-# Windows PowerShell
-where.exe gke-gcloud-auth-plugin
-# Linux, macOS, WSL
-which gke-gcloud-auth-plugin
-```
-
-Open a **new** terminal after the installation, and restart the IDE: a running process keeps the old `PATH`.
-
-*2. Login and get the cluster credentials*
-
-```bash
-gcloud auth login
-gcloud container clusters get-credentials <cluster-name> --zone <zone> --project <project>
-```
-
-Then check that `kubectl -n camunda get deployments` works.
-
-*3. Errors and their meaning*
-
-| Message | Cause |
-|---------|-------|
-| `'gke-gcloud-auth-plugin' is not recognized` / `executable gke-gcloud-auth-plugin not found` | The plugin is not installed, or not in the `PATH` of the process running Blueberry |
-| `Failure executing: GET at: https://<ip>/apis/apps/v1/... Message: Unauthorized` (401) | The Kubernetes client has no valid token: the plugin did not run, or the Google login expired. Run `gcloud auth login` again |
-| `Cannot construct instance of io.fabric8.kubernetes.client.Config$ExecCredential ... no String-argument constructor ... ('...\gke-gcloud-auth-plugin')` | The Kubernetes client (Fabric8 7.1.0) can not execute the plugin on Windows. It reads the path of the plugin instead of the token. Use the proxy below |
-
-*4. Windows: use `kubectl proxy`*
-
-On Windows, `kubectl` runs the plugin correctly but the Kubernetes client of Blueberry may not. Let `kubectl` do the authentication,
-and let Blueberry connect to a local proxy without any token.
-
-Start the proxy and keep it running:
-
-```bash
-kubectl proxy --port=8001
-```
-
-Create a small kubeconfig file, for example `kube-proxy.yaml`:
-
-```yaml
-apiVersion: v1
-kind: Config
-clusters:
-  - name: proxy
-    cluster:
-      server: http://localhost:8001
-contexts:
-  - name: proxy
-    context:
-      cluster: proxy
-      user: proxy
-current-context: proxy
-users:
-  - name: proxy
-    user: {}
-```
-
-Point Blueberry to this file and restart it:
-
-```yaml
-blueberry:
-  kubeConfig: C:\dev\kube-proxy.yaml
-```
-
-The proxy is only for a Blueberry running on your machine. Inside the cluster, the service account is used and none of this is needed.
+Check the environment with `GET /blueberry/api/restore/readiness` before starting a restore: the REST API answers, the secondary storage is known, and Optimize is stopped (Elasticsearch).
 
 ##### Google Cloud: access to the storage
 
 The Google login above is for the **Kubernetes API**. The backups are written in a Google Cloud Storage bucket by Zeebe and Elasticsearch,
 each with its own credentials, for example a service account key mounted from a Kubernetes secret
 (`GOOGLE_APPLICATION_CREDENTIALS` for Zeebe, `gcs.client.default.credentials_file` in the Elasticsearch keystore).
-These credentials are not related to the login of the Kubernetes client.
 
 
 
@@ -521,10 +370,13 @@ The configuration is available in the application.yaml, and thanks to SpringBoot
 | blueberry.elasticsearch.zeebeRecordContainerBasePath                     | In the container, folder to save the backup information                       | /zeeberecord                       |
 | blueberry.elasticsearch.zeebeRecordRepository                            | ZeebeRecord need a backup. Here is the name of the backup to be created       | camunda_zeebe_records_backup       |
 | blueberry.elasticsearch.zeebeRecordBasePath                              | In the container, folder to save the backup information                       | zeeberecordbackup                  |
-| blueberry.container.containerType                                        | Define the container used by Zeebe and by ElasticSearch. Value: "azure", "s3" | azure                              |
-| blueberry.container.azure.containerName                                  | If the type is azure, name of the container                                   | "YourAzureContainerName"           |
-| blueberry.container.s3.bucket                                            | If the type is S3, name of the bucket                                         | "YourS3Bucket"                     |
-| blueberry.container.s3.region                                            | if the type is S3, region of the bucket                                       | "us-east-2"                        |
+| _The next keys are parameters of the orchestration cluster: Blueberry reads them in /actuator/env of Zeebe first, and uses blueberry.orchestrationConfig when the actuator can't be reached or does not give the variable_ | | |
+| blueberry.orchestrationConfig.container.containerType                                        | Define the container used by Zeebe and by ElasticSearch. Value: "azure", "s3", "gcs", "filesystem" | azure                              |
+| blueberry.orchestrationConfig.azure.containerName                                  | If the type is azure, name of the container                                   | "YourAzureContainerName"           |
+| blueberry.orchestrationConfig.s3.bucketName                                            | If the type is S3, name of the bucket                                         | "YourS3Bucket"                     |
+| blueberry.orchestrationConfig.s3.region                                            | if the type is S3, region of the bucket                                       | "us-east-2"                        |
+| blueberry.orchestrationConfig.filesystem.path                                      | If the type is filesystem, the directory of the Elasticsearch repository, as Elasticsearch sees it (path.repo must contain it) | "/usr/share/elasticsearch/backups/elasticsearch" |
+| blueberry.orchestrationConfig.filesystem.basePath | If the type is filesystem, the directory of the Zeebe backup. Fallback of CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_FILESYSTEM_BASEPATH, read first in /actuator/env of Zeebe | "/usr/local/camunda/backups/zeebe" |
 
 
 
@@ -549,7 +401,6 @@ your Helm release.
 | Zeebe, actuator (management)    | 9600  | Connection check, exporters, partitions, the configuration (`/actuator/env`).                      | `blueberry.zeebeActuatorUrl`, `blueberry.zeebeActuatorPodUrl` |
 | Elasticsearch                   | 9200  | The snapshots of the secondary storage: list, repositories, restore.                               | `blueberry.elasticsearchurl`                       |
 | Optimize, actuator (management) | 8092  | The Optimize backup.                                                                               | `blueberry.optimizeActuatorUrl`                    |
-| Kubernetes API                  | 443   | The restore: stop and start the components, delete the volumes of Zeebe, read the pods.            | `blueberry.kubeConfig`                             |
 
 Since Camunda 8.8, Operate and Tasklist are part of the orchestration cluster (the Zeebe pods): they have no port of their own.
 The Zeebe gateway service gives the three ports 8080, 9600 and 26500.
@@ -592,15 +443,13 @@ camunda:
 
 Open in a browser, if you want to see the applications: `http://localhost:8080/operate` and `http://localhost:8080/tasklist`.
 
-## Why a proxy: the restore restarts the pods
+## Why a proxy: the pods restart
 
 A `kubectl port-forward` is connected to **one pod**: even when it is started on a service, kubectl chooses a pod when it starts.
 When this pod is deleted or restarted, the port-forward is broken (`lost connection to pod`), and it does not reconnect.
 
-The restore stops the components (Zeebe, the gateway, Optimize), deletes the volumes of Zeebe, then starts the components again.
-So during the restore, and when it ends, all the port-forward of the Zeebe pods are broken. Blueberry can't call the actuator
-or the REST API any more: it can't see that Zeebe is restarted, nor the result of the restore. You must stop the port-forward
-and start them again by hand.
+With the Restore API (Camunda 8.10) the brokers are **not restarted** by the restore: the cluster goes in recovery mode and comes back. A port-forward survives it.
+The proxy is still the safer choice: a pod restart for any other reason (an upgrade, a node failure, the restore of Camunda 8.8 or 8.9 by the Restore Application, which stops all the components) breaks every port-forward.
 
 The proxy does not have this issue. `kubectl proxy` goes through the Kubernetes API, which looks for the service or the pod
 **at each request**: after a restart, the next request reaches the new pod. The proxy gives the access to the actuator and to the
@@ -627,8 +476,6 @@ blueberry:
   optimizeActuatorUrl: http://localhost:8001/api/v1/namespaces/camunda/services/camunda-optimize:8092/proxy
   # Elasticsearch is not stopped by the restore: a port-forward is enough
   elasticsearchurl: http://localhost:9200
-  # The access to the Kubernetes API for the restore (a kubeconfig which uses the proxy, or your kubeconfig)
-  kubeConfig: src/main/resources/kube-proxy.yaml
 camunda:
   client:
     zeebe:
@@ -667,3 +514,56 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8001/api/v1/namespaces
 
 Check the [Development.md](../dev/Development.md)
 
+
+## Filesystem container (Docker Compose)
+
+A directory shared by Elasticsearch and Zeebe (a Docker volume) can be the container of the backups.
+
+```yaml
+blueberry:
+  zeebeActuatorUrl: http://localhost:9600
+  elasticsearchurl: http://localhost:9200
+  elasticsearch:
+    enabled: true
+    zeebeRecordRepository: camunda        # the name of the Elasticsearch repository
+  container:
+    containerType: filesystem
+    filesystem:
+      path: /usr/share/elasticsearch/backups/elasticsearch   # as Elasticsearch sees it
+```
+
+**Elasticsearch repository.** The **Configure** button creates it (the rule of the repository does it when it does not exist). It sends
+
+```shell
+PUT /_snapshot/camunda
+{"type": "fs", "settings": {"location": "/usr/share/elasticsearch/backups/elasticsearch"}}
+```
+
+which is the same as `docker exec elasticsearch curl -XPUT http://localhost:9200/_snapshot/camunda ...`. It creates the **repository** where the
+snapshots will be written: a snapshot is created later by the backup. Elasticsearch accepts it if:
+
+* `path.repo` contains the directory (`path.repo=/usr/share/elasticsearch/backups` in the environment of the container),
+* the directory exists and is writable by the user of Elasticsearch.
+
+All the rules use one repository (`zeebeRecordRepository` and `optimizeRepository` with the same name): two repositories can't have the same location.
+
+**Zeebe.** The rule "Zeebe Container" reads the backup store of Zeebe in `/actuator/env`:
+
+```
+CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_STORE=FILESYSTEM
+CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_FILESYSTEM_BASEPATH=/usr/local/camunda/backups/zeebe
+```
+
+and checks that the store is the container type of Blueberry (`filesystem`), and that the directory of Zeebe is defined. The environment of the
+orchestration must let Blueberry read it:
+
+```yaml
+- MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,prometheus,loggers,usage-metrics,env,configprops,exporters,partitions,cluster,backupRuntime,backupHistory,exporting
+- MANAGEMENT_ENDPOINT_ENV_ACCESS=unrestricted
+- MANAGEMENT_ENDPOINT_ENV_SHOWVALUES=ALWAYS
+- MANAGEMENT_ENDPOINT_CONFIGPROPS_ACCESS=unrestricted
+- MANAGEMENT_ENDPOINT_CONFIGPROPS_SHOWVALUES=ALWAYS
+```
+
+Development only: the values of the environment (passwords too) are visible on the management port. The same rule reads the older variables
+(`ZEEBE_BROKER_DATA_BACKUP_*`) and the properties of the configuration file (`camunda.data.primary-storage.backup.*`) too.

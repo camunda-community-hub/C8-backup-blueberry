@@ -1,55 +1,42 @@
 package io.camunda.blueberry.connect.secondary;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.blueberry.config.BlueberryConfig;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.List;
 import java.util.Locale;
 
 /**
  * Find the secondary storage of the cluster.
  * <p>
- * Detection: the actuator /actuator/env of the Zeebe (orchestration cluster) pod gives the property
- * camunda.data.secondary-storage.type (or the environment variable CAMUNDA_DATA_SECONDARYSTORAGE_TYPE).
- * It works only if the actuator exposes the endpoint 'env' with its values (management.endpoint.env.show-values).
- * Option B: the value blueberry.secondaryStorage of the configuration.
+ * It is the parameter {@link OrchestrationParameter#SECONDARY_STORAGE} of the orchestration cluster: the actuator /actuator/env
+ * of the Zeebe (orchestration cluster) pod gives the property camunda.data.secondary-storage.type (or the environment variable
+ * CAMUNDA_DATA_SECONDARYSTORAGE_TYPE). It works only if the actuator exposes the endpoint 'env' with its values
+ * (management.endpoint.env.show-values).
+ * Option B: the value blueberry.orchestrationConfig.secondaryStorage of the configuration.
  */
 @Component
 public class SecondaryStorageDetector {
-    /**
-     * Names of the property in /actuator/env, according to the source
-     */
-    static final List<String> PROPERTY_NAMES = List.of(
-            "camunda.data.secondary-storage.type",
-            "camunda.data.secondaryStorage.type",
-            "CAMUNDA_DATA_SECONDARYSTORAGE_TYPE");
-    static final String MASKED_VALUE = "******";
-
     public static final String SOURCE_CLUSTER = "cluster";
     public static final String SOURCE_CONFIGURATION = "configuration";
     public static final String SOURCE_NONE = "none";
 
     private final Logger logger = LoggerFactory.getLogger(SecondaryStorageDetector.class);
     private final BlueberryConfig blueberryConfig;
-    private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final OrchestrationParameter orchestrationParameter;
 
-    public SecondaryStorageDetector(BlueberryConfig blueberryConfig, RestTemplate restTemplate) {
+    public SecondaryStorageDetector(BlueberryConfig blueberryConfig, OrchestrationParameter orchestrationParameter) {
         this.blueberryConfig = blueberryConfig;
-        this.restTemplate = restTemplate;
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     /**
      * Result of the detection
      *
      * @param detected   value found in the cluster, empty if not detected
-     * @param configured value of the configuration (blueberry.secondaryStorage), empty if none
+     * @param configured value of the configuration (blueberry.orchestrationConfig.secondaryStorage), empty if none
      * @param value      the value to use: the detected one, else the configured one
      * @param source     cluster, configuration or none: where the value comes from
      * @param note       why the detection did not work, empty if it worked
@@ -76,29 +63,25 @@ public class SecondaryStorageDetector {
     }
 
     private Detection detectNow() {
-        String configured = blueberryConfig.getSecondaryStorage();
-        String note = "";
+        // read the cluster again
+        orchestrationParameter.refresh();
+
+        String configured = orchestrationParameter.getConfiguredValue(OrchestrationParameter.SECONDARY_STORAGE);
         String detected = "";
-        try {
-            detected = readInCluster();
-            if (detected.isEmpty()) {
-                note = "The secondary storage is not defined in the /actuator/env of Zeebe (the endpoint 'env' may not be exposed, or its values are hidden).";
-            }
-        } catch (HttpStatusCodeException e) {
-            int status = e.getStatusCode().value();
-            if (status == 404 || status == 401 || status == 403) {
-                // Expected: the actuator does not expose 'env' by default. It is optional: the configuration is used.
-                note = "The endpoint " + blueberryConfig.getZeebeActuatorUrl() + "/actuator/env is not exposed by Zeebe (HTTP " + status
-                        + "). To let Blueberry detect the secondary storage, add 'env' to management.endpoints.web.exposure.include "
-                        + "(environment variable MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE) and set MANAGEMENT_ENDPOINT_ENV_SHOWVALUES=ALWAYS. "
-                        + "Without it, the value of blueberry.secondaryStorage is used.";
-            } else {
-                note = "Can't read " + blueberryConfig.getZeebeActuatorUrl() + "/actuator/env: HTTP " + status;
-            }
-            logger.info("Secondary storage: detection impossible. {}", note);
-        } catch (Exception e) {
-            note = "Can't read " + blueberryConfig.getZeebeActuatorUrl() + "/actuator/env: " + e.getMessage();
-            logger.info("Secondary storage: detection impossible. {}", note);
+        String note = "";
+        OrchestrationParameter.Parameter parameter = orchestrationParameter.getParameters().stream()
+                .filter(p -> OrchestrationParameter.SECONDARY_STORAGE.equals(p.getName()))
+                .findFirst().orElse(null);
+        if (parameter != null && parameter.getOrigin() == OrchestrationParameter.Parameter.Origin.ACTUATOR && parameter.getValue() != null) {
+            detected = String.valueOf(parameter.getValue()).trim().toLowerCase(Locale.ROOT);
+        }
+        if (detected.isEmpty()) {
+            String environmentNote = orchestrationParameter.getEnvironmentNote();
+            note = environmentNote.isEmpty()
+                    ? "The secondary storage is not defined in the /actuator/env of Zeebe (the endpoint 'env' may not be exposed, or its values are hidden)."
+                    + " Without it, the value of blueberry.orchestrationConfig.secondaryStorage is used."
+                    : environmentNote + " Without it, the value of blueberry.orchestrationConfig.secondaryStorage is used.";
+            logger.info("Secondary storage: detection impossible. {} (actuator {})", note, blueberryConfig.getZeebeActuatorUrl());
         }
 
         String value = detected;
@@ -113,31 +96,5 @@ public class SecondaryStorageDetector {
             source = SOURCE_NONE;
         }
         return new Detection(detected, configured, value, source, note);
-    }
-
-    /**
-     * @return the type found in /actuator/env (lower case), empty if the property is not there or is hidden
-     */
-    private String readInCluster() throws Exception {
-        String url = blueberryConfig.getZeebeActuatorUrl() + "/actuator/env";
-        String body = restTemplate.getForObject(url, String.class);
-        if (body == null) {
-            return "";
-        }
-        JsonNode propertySources = objectMapper.readTree(body).path("propertySources");
-        for (JsonNode propertySource : propertySources) {
-            JsonNode properties = propertySource.path("properties");
-            for (String name : PROPERTY_NAMES) {
-                JsonNode property = properties.path(name);
-                if (property.isMissingNode()) {
-                    continue;
-                }
-                String value = property.path("value").asText("");
-                if (!value.isEmpty() && !MASKED_VALUE.equals(value)) {
-                    return value.trim().toLowerCase(Locale.ROOT);
-                }
-            }
-        }
-        return "";
     }
 }

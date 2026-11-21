@@ -49,7 +49,7 @@ class CheckData extends React.Component {
 
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-10">
-                        <h1 className="title">Check Data</h1>
+                        <h1 className="title"><DatabaseCheck/> Check Data</h1>
                         <InlineNotification kind="info" hideCloseButton="true" lowContrast="false">
                             Check if data is consistent between Zeebe, Operate, Tasklist, Optimize
                         </InlineNotification>

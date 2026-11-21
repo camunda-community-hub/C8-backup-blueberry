@@ -14,7 +14,7 @@ import Chart from "../component/Chart";
 import BackupTimeline from "../component/BackupTimeline";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import RestCallService from "../services/RestCallService";
-import {ArrowRepeat, Terminal} from "react-bootstrap-icons";
+import {ArrowRepeat, Speedometer2, Terminal} from "react-bootstrap-icons";
 import Tooltip from "react-bootstrap/Tooltip";
 
 
@@ -96,7 +96,7 @@ class Dashboard extends React.Component {
 
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-10">
-                        <h1 className="title">Dashboard</h1>
+                        <h1 className="title"><Speedometer2/> Dashboard</h1>
                         <InlineNotification kind="info" hideCloseButton="true" lowContrast="false">
                             Backup timeline uses the merged list from all components. Refresh loads live data;
                             the page also auto-refreshes every 2 minutes (connections every 60 seconds).

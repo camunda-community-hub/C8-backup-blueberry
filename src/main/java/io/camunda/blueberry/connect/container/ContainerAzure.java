@@ -1,16 +1,16 @@
 package io.camunda.blueberry.connect.container;
 
-import io.camunda.blueberry.config.BlueberryConfig;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ContainerAzure implements Container {
 
     public static final String AZURE = "azure";
-    BlueberryConfig blueberryConfig;
+    OrchestrationParameter orchestrationParameter;
 
-    ContainerAzure(BlueberryConfig blueberryConfig) {
-        this.blueberryConfig = blueberryConfig;
+    ContainerAzure(OrchestrationParameter orchestrationParameter) {
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     @Override
@@ -20,7 +20,7 @@ public class ContainerAzure implements Container {
 
     @Override
     public String getElasticsearchPayload(String basePathInsideContainer) {
-        String containerName = blueberryConfig.getAzureContainerName();
+        String containerName = orchestrationParameter.getParameterString(OrchestrationParameter.AZURE_CONTAINERNAME);
         return String.format("""
                 {
                   "type": "%s",
@@ -34,7 +34,7 @@ public class ContainerAzure implements Container {
     }
 
     public String getInformation() {
-        String containerName = blueberryConfig.getAzureContainerName();
+        String containerName = orchestrationParameter.getParameterString(OrchestrationParameter.AZURE_CONTAINERNAME);
         return "Container type[" + AZURE + "] name[" + containerName + "]";
     }
 }

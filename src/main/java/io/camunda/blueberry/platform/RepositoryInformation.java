@@ -2,10 +2,8 @@ package io.camunda.blueberry.platform;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.CamundaApplicationInt;
-import io.camunda.blueberry.platform.rule.AccessParameterValue;
-import io.camunda.blueberry.platform.rule.RuleOperateRepository;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.platform.rule.RuleOptimizeRepository;
-import io.camunda.blueberry.platform.rule.RuleTasklistRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -21,7 +19,7 @@ import java.util.List;
 public class RepositoryInformation {
 
     /**
-     * @param name          component: operate, tasklist, optimize, zeeberecord
+     * @param name          component: optimize, zeeberecord
      * @param configuration repository in the blueberry configuration (used by the backup and the restore)
      * @param cluster       repository read in the cluster. Empty: the value can't be read, see the comment
      * @param comment       why the cluster value is empty. Empty when the cluster value is given
@@ -35,14 +33,14 @@ public class RepositoryInformation {
     private static final long CACHE_MILLIS = 30_000;
 
     private final BlueberryConfig blueberryConfig;
-    private final AccessParameterValue accessParameterValue;
+    private final OrchestrationParameter orchestrationParameter;
 
     private List<Repository> cache;
     private long cacheTime = 0;
 
-    public RepositoryInformation(BlueberryConfig blueberryConfig, AccessParameterValue accessParameterValue) {
+    public RepositoryInformation(BlueberryConfig blueberryConfig, OrchestrationParameter orchestrationParameter) {
         this.blueberryConfig = blueberryConfig;
-        this.accessParameterValue = accessParameterValue;
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     public synchronized List<Repository> list() {
@@ -50,12 +48,7 @@ public class RepositoryInformation {
             return cache;
         }
         List<Repository> repositories = new ArrayList<>();
-        repositories.add(readInCluster("operate", blueberryConfig.getOperateRepository(),
-                CamundaApplicationInt.COMPONENT.OPERATE, RuleOperateRepository.OPERATE_REPOSITORY,
-                blueberryConfig.getOperateActuatorUrl()));
-        repositories.add(readInCluster("tasklist", blueberryConfig.getTasklistRepository(),
-                CamundaApplicationInt.COMPONENT.TASKLIST, RuleTasklistRepository.TASKLIST_REPOSITORY,
-                blueberryConfig.getTasklistActuatorUrl()));
+        // Operate and Tasklist have no repository of their own since 8.8: their indices are in the history backup
         repositories.add(readInCluster("optimize", blueberryConfig.getOptimizeRepository(),
                 CamundaApplicationInt.COMPONENT.OPTIMIZE, RuleOptimizeRepository.OPTIMIZE_REPOSITORY,
                 blueberryConfig.getOptimizeActuatorUrl()));
@@ -75,7 +68,7 @@ public class RepositoryInformation {
             return new Repository(name, configuration, "", "The actuator url of the component is not defined");
         }
         try {
-            AccessParameterValue.ResultParameter result = accessParameterValue.accessParameterViaActuator(
+            OrchestrationParameter.ResultParameter result = orchestrationParameter.accessParameterViaActuator(
                     component, List.of(parameter), actuatorUrl + "/actuator/env");
             Object value = result.parameters.get(parameter);
             if (result.accessActuator && value instanceof String repository) {

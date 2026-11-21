@@ -36,14 +36,6 @@ public class BlueberryConfig {
     private boolean elasticsearchEnabled;
 
     /**
-     * Secondary storage of the cluster: elasticsearch, sqlserver, ... It is detected on the cluster when possible
-     * (see SecondaryStorageDetector). This value is the option B, used when the detection is not possible.
-     * The name is matched whatever the case (blueberry.secondaryStorage or blueberry.secondarystorage).
-     */
-    @Value("${blueberry.secondarystorage:}")
-    private String secondaryStorage;
-
-    /**
      * Base url of the Zeebe REST API (/v2/...). Empty: the rest address of the Camunda client is used
      * (camunda.client.zeebe.rest-address)
      */
@@ -65,25 +57,8 @@ public class BlueberryConfig {
     @Value("${blueberry.optimize.enabled:true}")
     private boolean optimizeEnabled;
 
-    @Value("${blueberry.namespace:camunda}")
-    private String namespace;
-
-
-    @Value("${blueberry.kubeConfig:}")
-    private String kubeConfig;
-
-    /** Optional kubectl context name (e.g. kind-camunda-platform-local). Uses ~/.kube/config when kubeConfig is unset. */
-    @Value("${blueberry.kubeContext:}")
-    private String kubeContext;
-
     @Value("${blueberry.restore.execution:false}")
     private boolean restoreExecution;
-
-    @Value("${blueberry.restore.helmRelease:camunda87helm}")
-    private String restoreHelmRelease;
-
-    @Value("${blueberry.restore.podDeleteTimeoutSeconds:300}")
-    private int restorePodDeleteTimeoutSeconds;
 
     @Value("${blueberry.restore.zeebeRestoreTimeoutSeconds:1800}")
     private int restoreZeebeTimeoutSeconds;
@@ -102,7 +77,7 @@ public class BlueberryConfig {
     private String zeebeRecordRepository;
 
     /**
-     * These values are temporary. KubernetesConnect should get that values directly from pôds
+     * These values are temporary. They should come from the pods
      */
     @Value("${blueberry.optimizeRepository}")
     private String optimizeRepository;
@@ -111,30 +86,8 @@ public class BlueberryConfig {
     private String zeebeRepository;
 
 
-    // Containers
-    @Value("${blueberry.container.containerType:}")
-    private String containerType;
-
-    @Value("${blueberry.container.azure.containerName:}")
-    private String azureContainerName;
-    @Value("${blueberry.container.azure.basePath:}")
-    private String azureBasePath;
-
-    // S3 specific configuration
-    @Value("${blueberry.container.s3.bucket:}")
-    private String s3Bucket;
-
-    @Value("${blueberry.container.s3.basePath:}")
-    private String s3BasePath;
-
-    @Value("${blueberry.container.gcs.bucket:}")
-    private String gcsBucket;
-
-    @Value("${blueberry.container.gcs.basePath:}")
-    private String gcsBasePath;
-
-    @Value("${blueberry.container.s3.region:}")
-    private String s3Region;
+    // The containers (type, bucket, directory...) and the secondary storage are parameters of the orchestration cluster:
+    // see OrchestrationParameter (the actuator of Zeebe, else blueberry.orchestrationConfig)
 
 
     // Getters for general properties
@@ -160,19 +113,30 @@ public class BlueberryConfig {
         return elasticsearchUrl;
     }
 
+    /* ******************************************************************** */
+    /*  Restore (blueberry.restore.*)                                        */
+    /* ******************************************************************** */
+
+    /**
+     * blueberry.restore.execution: true to let Blueberry run the restore (it deletes data). False: the restore is only described.
+     */
+    public boolean isRestoreExecutionEnabled() {
+        return restoreExecution;
+    }
+
+    /**
+     * Time allowed to the restore of Zeebe, in seconds (the recovery mode, the restore, the return to the processing mode)
+     */
+    public int getRestoreZeebeTimeoutSeconds() {
+        return restoreZeebeTimeoutSeconds;
+    }
+
     public boolean isElasticsearchEnabled() {
         return elasticsearchEnabled;
     }
 
     public boolean isOptimizeEnabled() {
         return optimizeEnabled;
-    }
-
-    /**
-     * @return the secondary storage given in the configuration, empty if none
-     */
-    public String getSecondaryStorage() {
-        return secondaryStorage == null ? "" : secondaryStorage.trim();
     }
 
     public String getZeebeRestUrl() {
@@ -187,22 +151,6 @@ public class BlueberryConfig {
         return zeebeRestPassword == null ? "" : zeebeRestPassword;
     }
 
-    public String getNamespace() {
-        return namespace;
-    }
-
-    public String getAzureContainerName() {
-        return azureContainerName;
-    }
-
-    public String getAzureBasePath() {
-        return azureBasePath;
-    }
-
-    public String getZeebeContainerType() {
-        return containerType;
-    }
-
     public String getZeebeRecordRepository() {
         return zeebeRecordRepository;
     }
@@ -215,10 +163,6 @@ public class BlueberryConfig {
         return zeebeRecordContainerBasePath;
     }
 
-    public String getKubeConfig() {
-        return kubeConfig == null || kubeConfig.trim().isEmpty() ? null : kubeConfig;
-    }
-
     public String getOptimizeRepository() {
         return optimizeRepository;
     }
@@ -226,29 +170,6 @@ public class BlueberryConfig {
     public String getZeebeRepository() {
         return zeebeRepository;
     }
-
-    // Getters for S3 configuration
-    public String getS3Bucket() {
-        return s3Bucket;
-    }
-
-    public String getS3BasePath() {
-        return s3BasePath;
-    }
-
-    public String getS3Region() {
-        return s3Region;
-    }
-
-    // Getters for S3 configuration
-    public String getGcsBucket() {
-        return gcsBucket;
-    }
-
-    public String getGcsBasePath() {
-        return gcsBasePath;
-    }
-
 
     /**
      * Access all configuration variables and return it dynamically.

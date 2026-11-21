@@ -10,24 +10,47 @@ blueberry:
   restore:
     execution: false
 
-  kubernetes:
-    token: gcloud
-    masterUrl: "https"
-    certificate-authority-data: ""
-    name: ""
-
   optimize:
     enabled: false
-
-  # Secondary storage of the cluster: elasticsearch or sqlserver. Blueberry detects it on the cluster
-  # (camunda.data.secondary-storage.type, in the actuator /actuator/env of Zeebe). This value is used when the detection
-  # is not possible. For sqlserver, see the blueberry.sqlserver section of the documentation (url, username, password,
-  # database, backupPath).
-  secondaryStorage: elasticsearch
 
   # The backup uses the REST API of the cluster (/v2/exporting, /v2/backups). By default the rest address of the Camunda
   # client (camunda.client.zeebe.rest-address) and its basic authentication (camunda.client.auth) are used.
   # zeebeRestUrl: http://camunda-zeebe-gateway:8080
+
+  # The configuration of the orchestration cluster (Zeebe). Blueberry reads it in /actuator/env of Zeebe when it can
+  # (CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_*). These values are used when the actuator can't be reached, or does not give the variable.
+  orchestrationConfig:
+    # Secondary storage of the cluster: elasticsearch, postgres or sqlserver (CAMUNDA_DATA_SECONDARYSTORAGE_TYPE,
+    # camunda.data.secondary-storage.type). For postgres: blueberry.postgres.host, port, database, username, password,
+    # backupDirectory (pg_dump and pg_restore must be installed). For sqlserver, see the blueberry.sqlserver section of the
+    # documentation (url, username, password, database, backupPath). With "rdbms" in the cluster, this value gives the vendor.
+    secondaryStorage: elasticsearch
+
+    # The container used by Zeebe and by Elasticsearch (CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_STORE and the variables of its type)
+    container:
+      # gcs, s3, azure or filesystem
+      containerType: gcs
+    azure:
+      # CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_AZURE_CONTAINERNAME
+      containerName: "YourAzureContainerName"
+    s3:
+      # CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_S3_BUCKETNAME, _S3_REGION
+      bucketName: "YourS3Bucket"
+      region: "us-east-2"
+    gcs:
+      # CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_GCS_BUCKETNAME, _GCS_BASEPATH
+      bucketName: "pym-pc8backup-20250411"
+      basePath: "zeebecontainer"
+    filesystem:
+      # CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_FILESYSTEM_BASEPATH: the directory of Zeebe
+      basePath: /usr/local/camunda/backups/zeebe
+      # The directory of the Elasticsearch repository, as Elasticsearch sees it (path.repo must contain it). Only for filesystem
+      # path: /usr/share/elasticsearch/backups/elasticsearch
+    # CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_CONTINUOUS, _SCHEDULE, _CHECKPOINTINTERVAL, _RETENTION_WINDOW
+    backupContinuous: true
+    backupSchedule: PT10M
+    backupCheckpointInterval: PT1M
+    backupRetentionWindow: P7D
 
   # When repository need to be created, then a base path is used. All based path used
   elasticsearch:
@@ -38,18 +61,7 @@ blueberry:
     zeebeRecordRepository: camunda_zeebe_records_backup
     zeebeRecordBasePath: zeeberecordbackup
 
-    # Define the container used by Zeebe and by ElasticSearch
-  container:
-    containerType: gcs
-    azure:
-      containerName: "YourAzureContainerName"
-    s3:
-      bucketName: "YourS3Bucket"
-      region: "us-east-2"
-    gcs:
-      bucketName: "pym-pc8backup-20250411"
-      basePath: "zeebecontainer"
-      region: "us-east-2"
+    # The container used by Zeebe and by Elasticsearch is in blueberry.orchestrationConfig
 
 
 server:

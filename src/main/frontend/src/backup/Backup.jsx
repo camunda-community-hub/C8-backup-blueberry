@@ -14,7 +14,7 @@ import RepositoryTable from "../component/RepositoryTable";
 import {renderOperationLogMessages} from "../component/OperationLogMessages";
 
 import {Button, InlineNotification, Tag, TextInput, Dropdown} from "carbon-components-react";
-import {ArrowRepeat} from "react-bootstrap-icons";
+import {ArrowRepeat, DatabaseUp, Gear} from "react-bootstrap-icons";
 import {Card} from "react-bootstrap";
 
 const items = [{ id: "EXPLICIT", text: "Explicit" }, { id: "NEXTID", text: "Next id" }, { id: "TIMEBACKUP", text: "Time backup (yyyymmddHHMM" },];
@@ -32,6 +32,7 @@ class Backup extends React.Component {
             listUrlsBackup: [],
             currentBackup: {statusBackup: ""},
             backupPhases: [],
+            backupConfiguration: {mode: "", schedule: "", retentionWindow: ""},
             docsBackupUrl: "",
             camundaMinorVersion: ""
 
@@ -42,6 +43,7 @@ class Backup extends React.Component {
     componentDidMount() {
         this.refreshListBackups();
         this.loadBackupPhases();
+        this.loadBackupConfiguration();
         this.monitorBackup();
 
         // Call the monitor every minute
@@ -67,7 +69,7 @@ class Backup extends React.Component {
             <div className={"container"}>
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-10">
-                        <h1 className="title">Backup</h1>
+                        <h1 className="title"><DatabaseUp/> Backup</h1>
                         <InlineNotification kind="info" hideCloseButton="true" lowContrast="false">
                             Last backup are listed.
                         </InlineNotification>
@@ -133,6 +135,9 @@ class Backup extends React.Component {
                             </Card.Body>
                         </Card>
                     </div>
+                    <div className="col-md-6">
+                        {this.renderConfigurationCard()}
+                    </div>
                 </div>
 
                 <div className="row" style={{marginTop: "10px"}}>
@@ -147,6 +152,7 @@ class Backup extends React.Component {
                                 this.refreshListBackups();
                                 this.monitorBackup();
                                 this.loadBackupPhases();
+                                this.loadBackupConfiguration();
                             }}
                             disabled={this.state.display.loading}>
                         <ArrowRepeat/> Refresh
@@ -215,6 +221,52 @@ class Backup extends React.Component {
         )
     }
 
+
+    /**
+     * The backup configuration of the cluster: mode, scheduler and retention period
+     */
+    renderConfigurationCard() {
+        const config = this.state.backupConfiguration;
+        const origin = (value) => value ? <Tag type={value === "ACTUATOR" ? "green" : "gray"} size="sm">
+            {value === "ACTUATOR" ? "cluster" : "configuration"}</Tag> : null;
+        return (
+            <Card>
+                <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}}>
+                    <Gear/> Configuration
+                </Card.Header>
+                <Card.Body>
+                    <table style={{borderCollapse: "separate", borderSpacing: "10px"}}>
+                        <tbody>
+                        <tr>
+                            <td>Backup mode</td>
+                            <td>{config.mode ? <strong>{config.mode}</strong> : "—"} {origin(config.modeOrigin)}</td>
+                        </tr>
+                        <tr>
+                            <td>Scheduler</td>
+                            <td>{config.schedule ? <strong>{config.schedule}</strong> : "—"} {origin(config.scheduleOrigin)}</td>
+                        </tr>
+                        <tr>
+                            <td>Backup retention period</td>
+                            <td>{config.retentionWindow ? <strong>{config.retentionWindow}</strong> : "—"} {origin(config.retentionWindowOrigin)}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    <p className="text-muted" style={{marginBottom: 0}}>
+                        Read in the environment of Zeebe (CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_CONTINUOUS, _SCHEDULE,
+                        _RETENTION_WINDOW), else in the configuration of Blueberry.
+                    </p>
+                </Card.Body>
+            </Card>
+        );
+    }
+
+    loadBackupConfiguration() {
+        RestCallService.getInstance().getJson('blueberry/api/backup/parameter?', this, (httpPayload) => {
+            if (!httpPayload.isError()) {
+                this.setState({backupConfiguration: httpPayload.getData()});
+            }
+        });
+    }
 
     renderCurrentBackupCard() {
         const cb = this.state.currentBackup;

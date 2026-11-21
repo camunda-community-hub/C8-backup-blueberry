@@ -1,5 +1,6 @@
 package io.camunda.blueberry.platform.rule;
 
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -161,7 +162,7 @@ public interface Rule {
          * @param result         result of the access to the actuator
          * @param repositoryName name of the repository used by the rule
          */
-        public void addActuatorEnvInfo(String componentName, String envUrl, AccessParameterValue.ResultParameter result,
+        public void addActuatorEnvInfo(String componentName, String envUrl, OrchestrationParameter.ResultParameter result,
                                        Object repositoryName) {
             String action = "Access the actuator " + envUrl;
             if (result.accessActuator) {

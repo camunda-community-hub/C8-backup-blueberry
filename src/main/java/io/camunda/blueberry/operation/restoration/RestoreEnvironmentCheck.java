@@ -1,83 +1,85 @@
 package io.camunda.blueberry.operation.restoration;
 
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.ElasticSearchConnect;
-import io.camunda.blueberry.connect.Fabric8KubernetesWorkload;
-import io.camunda.blueberry.connect.KubernetesConnect;
-import io.camunda.blueberry.exception.OperationException;
+import io.camunda.blueberry.connect.OptimizeConnect;
+import io.camunda.blueberry.connect.ZeebeRestApi;
+import io.camunda.blueberry.connect.secondary.SecondaryStorageDetector;
+import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
+import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 /**
- * Live checks before a destructive restore (Kubernetes API + Elasticsearch HTTP).
+ * Live checks before a destructive restore with the Restore API: no Kubernetes, only the REST API of the cluster and the
+ * secondary storage.
  */
 @Component
 public class RestoreEnvironmentCheck {
 
     private final BlueberryConfig blueberryConfig;
-    private final KubernetesConnect kubernetesConnect;
-    private final ElasticSearchConnect elasticSearchConnect;
-    private final Fabric8KubernetesWorkload kubernetesWorkload;
+    private final ZeebeRestApi zeebeRestApi;
+    private final SecondaryStorageFactory secondaryStorageFactory;
+    private final BooleanSupplier optimizeRunning;
 
-    public RestoreEnvironmentCheck(BlueberryConfig blueberryConfig,
-                                     KubernetesConnect kubernetesConnect,
-                                     ElasticSearchConnect elasticSearchConnect,
-                                     Fabric8KubernetesWorkload kubernetesWorkload) {
+    @Autowired
+    public RestoreEnvironmentCheck(BlueberryConfig blueberryConfig, ZeebeRestApi zeebeRestApi,
+                                   SecondaryStorageFactory secondaryStorageFactory, OptimizeConnect optimizeConnect) {
+        this(blueberryConfig, zeebeRestApi, secondaryStorageFactory,
+                () -> blueberryConfig.isOptimizeEnabled() && optimizeConnect.isConnected());
+    }
+
+    RestoreEnvironmentCheck(BlueberryConfig blueberryConfig, ZeebeRestApi zeebeRestApi,
+                            SecondaryStorageFactory secondaryStorageFactory, BooleanSupplier optimizeRunning) {
         this.blueberryConfig = blueberryConfig;
-        this.kubernetesConnect = kubernetesConnect;
-        this.elasticSearchConnect = elasticSearchConnect;
-        this.kubernetesWorkload = kubernetesWorkload;
+        this.zeebeRestApi = zeebeRestApi;
+        this.secondaryStorageFactory = secondaryStorageFactory;
+        this.optimizeRunning = optimizeRunning;
     }
 
     public Map<String, Object> readiness() {
-        RestoreLayout layout = RestoreLayout.from(blueberryConfig);
         List<String> blockers = new ArrayList<>();
-        Map<String, Object> workloads = new LinkedHashMap<>();
 
-        boolean kubernetes = kubernetesConnect.isConnected();
-        boolean elasticsearch = elasticSearchConnect.isConnected();
-        if (!kubernetes) {
-            blockers.add("Kubernetes API is not reachable.");
-        }
-        if (!elasticsearch) {
-            blockers.add("Elasticsearch is not reachable at " + blueberryConfig.getElasticsearchUrl());
+        // The REST API of the cluster: /v2/mode and /v2/restore (Camunda 8.10)
+        ZeebeRestApi.RestResult topology = zeebeRestApi.getTopology();
+        boolean restApi = topology.isSuccess();
+        if (!restApi) {
+            blockers.add("The REST API of the cluster does not answer: GET " + zeebeRestApi.getBaseUrl() + "/topology answered "
+                    + topology.status() + ". The Restore API exists from Camunda 8.10. Check camunda.client.zeebe.restAddress "
+                    + "(or blueberry.zeebeRestUrl) and the credentials.");
         }
 
-        if (kubernetes) {
-            for (WorkloadRef ref : List.of(layout.operate(), layout.tasklist(), layout.gateway(), layout.zeebe())) {
-                try {
-                    workloads.put(ref.name(), kubernetesWorkload.exists(ref));
-                } catch (OperationException e) {
-                    workloads.put(ref.name(), false);
-                    blockers.add(e.getMessage());
-                }
-            }
-            try {
-                if (kubernetesWorkload.exists(layout.optimize())) {
-                    workloads.put(layout.optimize().name(), true);
-                }
-            } catch (OperationException ignored) {
-                // Optimize optional
-            }
-            for (Map.Entry<String, Object> entry : workloads.entrySet()) {
-                if (Boolean.FALSE.equals(entry.getValue())) {
-                    blockers.add("Missing workload " + entry.getKey() + " in namespace " + layout.namespace());
-                }
-            }
+        // The secondary storage, and what Blueberry can do with it
+        SecondaryStorageDetector.Detection detection = secondaryStorageFactory.detect();
+        SecondaryStorageInt secondaryStorage = secondaryStorageFactory.getSecondaryStorage();
+        if (secondaryStorage == null) {
+            blockers.add(detection.value().isEmpty()
+                    ? "The secondary storage is unknown: set blueberry.secondaryStorage (" + String.join(", ", secondaryStorageFactory.getSupportedNames()) + ")."
+                    : "Blueberry has no implementation for the secondary storage [" + detection.value() + "]. Supported: "
+                    + String.join(", ", secondaryStorageFactory.getSupportedNames()));
+        } else if (!secondaryStorage.supportsRestore()) {
+            blockers.add("Blueberry can't restore the secondary storage [" + secondaryStorage.getName() + "].");
+        }
+
+        // With Elasticsearch, Optimize is the only component to stop, and the REST API can't stop it
+        boolean database = secondaryStorage != null && secondaryStorage.isDatabase();
+        boolean optimize = !database && optimizeRunning.getAsBoolean();
+        if (optimize) {
+            blockers.add("Optimize is running: stop it before the restore (the REST API can't stop it), and start it after.");
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("kubernetesConnected", kubernetes);
-        result.put("elasticsearchConnected", elasticsearch);
+        result.put("restoreApiConnected", restApi);
+        result.put("restoreApiUrl", zeebeRestApi.getBaseUrl());
+        result.put("secondaryStorage", detection.value());
+        result.put("secondaryStorageSource", detection.source());
+        result.put("optimizeRunning", optimize);
         result.put("executionEnabled", blueberryConfig.isRestoreExecutionEnabled());
-        result.put("namespace", layout.namespace());
-        result.put("helmRelease", layout.helmRelease());
-        result.put("repositories", layout.repositories());
-        result.put("workloads", workloads);
         result.put("ready", blockers.isEmpty() && blueberryConfig.isRestoreExecutionEnabled());
         result.put("blockers", blockers);
         return result;

@@ -53,9 +53,20 @@ class RestorePreflightTest {
     }
 
     @Test
-    void restore87EndsWithTheClusterRestartedStep() {
-        List<String> ids = PROFILE.restorePhases().stream().map(p -> p.id()).toList();
-        org.junit.jupiter.api.Assertions.assertEquals(11, ids.size());
-        org.junit.jupiter.api.Assertions.assertEquals("cluster_restarted", ids.get(10));
+    void restore810UsesTheRestoreApiWithoutKubernetes() {
+        List<String> ids = CamundaVersionProfile.forMinor("8.10").restorePhases().stream().map(p -> p.id()).toList();
+        org.junit.jupiter.api.Assertions.assertEquals(
+                List.of("validate", "recovery_mode", "secondary_storage", "zeebe_restore", "processing"), ids);
+        // the number of phases is the number of steps of the executor
+        org.junit.jupiter.api.Assertions.assertEquals(RestoreApiExecutor.NUMBER_OF_STEPS, ids.size());
+    }
+
+    @Test
+    void theOtherVersionsAreDescribedNotExecuted() {
+        for (String minor : List.of("8.7", "8.8", "8.9")) {
+            boolean automatedRestore = CamundaVersionProfile.forMinor(minor).restorePhases().stream()
+                    .anyMatch(p -> p.id().equals("recovery_mode"));
+            org.junit.jupiter.api.Assertions.assertFalse(automatedRestore, minor);
+        }
     }
 }

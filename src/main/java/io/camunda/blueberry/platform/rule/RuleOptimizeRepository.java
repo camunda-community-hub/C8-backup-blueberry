@@ -1,6 +1,7 @@
 package io.camunda.blueberry.platform.rule;
 
 
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.*;
 import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
@@ -19,19 +20,16 @@ public class RuleOptimizeRepository implements Rule {
     public static final String OPTIMIZE_REPOSITORY = "optimizeRepository";
     private final BlueberryConfig blueberryConfig;
 
-    private final KubernetesConnect kubernetesConnect;
-
 
     private final ElasticSearchConnect elasticSearchConnect;
 
-    private final AccessParameterValue accessParameterValue;
+    private final OrchestrationParameter orchestrationParameter;
 
-    RuleOptimizeRepository(BlueberryConfig blueberryConfig, KubernetesConnect kubernetesConnect, ElasticSearchConnect elasticSearchConnect,
-                           AccessParameterValue accessParameterValue) {
+    RuleOptimizeRepository(BlueberryConfig blueberryConfig, ElasticSearchConnect elasticSearchConnect,
+                           OrchestrationParameter orchestrationParameter) {
         this.blueberryConfig = blueberryConfig;
-        this.kubernetesConnect = kubernetesConnect;
         this.elasticSearchConnect = elasticSearchConnect;
-        this.accessParameterValue = accessParameterValue;
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     @Override
@@ -82,7 +80,7 @@ public class RuleOptimizeRepository implements Rule {
         // ---------- First step, ask Optimize for the name of the repository
         ruleInfo.setStatus(RuleStatus.INPROGRESS);
 
-        AccessParameterValue.ResultParameter resultParameter;
+        OrchestrationParameter.ResultParameter resultParameter;
         try {
             resultParameter = accessParameters();
         } catch (CommunicationException e) {
@@ -129,7 +127,7 @@ public class RuleOptimizeRepository implements Rule {
         if (execute && ruleInfo.inProgress()) {
 
             OperationResult operationResult = elasticSearchConnect.createRepository(optimizeRepository,
-                    blueberryConfig.getZeebeContainerType(),
+                    orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
                     blueberryConfig.getOptimizeContainerBasePath());
             if (operationResult.success) {
                 ruleInfo.addDetails("Repository is created in ElasticSearch");
@@ -152,11 +150,11 @@ public class RuleOptimizeRepository implements Rule {
         return ruleInfo;
     }
 
-    public AccessParameterValue.ResultParameter accessParameters() throws CommunicationException {
+    public OrchestrationParameter.ResultParameter accessParameters() throws CommunicationException {
         try {
-            return accessParameterValue.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPTIMIZE, List.of(OPTIMIZE_REPOSITORY), blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env");
+            return orchestrationParameter.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPTIMIZE, List.of(OPTIMIZE_REPOSITORY), blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env");
         } catch (CommunicationException e) {
-            AccessParameterValue.ResultParameter resultParameter = new AccessParameterValue.ResultParameter();
+            OrchestrationParameter.ResultParameter resultParameter = new OrchestrationParameter.ResultParameter();
             resultParameter.accessActuator = false;
             resultParameter.parameters.put(OPTIMIZE_REPOSITORY, blueberryConfig.getOptimizeRepository());
             return resultParameter;
@@ -171,19 +169,6 @@ public class RuleOptimizeRepository implements Rule {
 
     private String getRepositoryByOperateEnvironment(RuleInfo ruleInfo) {
         ruleInfo.addDetails("Access RepositoryName exploring Operate environment");
-        return null;
-    }
-
-    private String getRepositoryKubernetes(RuleInfo ruleInfo) {
-        OperationResult operationResult = kubernetesConnect.getRepositoryName(CamundaApplicationInt.COMPONENT.OPTIMIZE, blueberryConfig.getNamespace());
-        if (!operationResult.success) {
-            ruleInfo.addDetails("Can't access the Repository name in the pod, or does not exist");
-            ruleInfo.addDetails(operationResult.details);
-            ruleInfo.setStatus(RuleStatus.FAILED);
-        } else {
-            ruleInfo.addDetails("Access RepositoryName exploring Kubernetes environment");
-            return operationResult.resultSt;
-        }
         return null;
     }
 

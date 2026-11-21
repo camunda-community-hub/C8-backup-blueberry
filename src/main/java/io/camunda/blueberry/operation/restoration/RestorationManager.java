@@ -19,18 +19,26 @@ public class RestorationManager {
     private final BackupManager backupManager;
     private final CamundaVersionService versionService;
     private final BlueberryConfig blueberryConfig;
-    private final Pwc87RestoreExecutor restoreExecutor;
+    private final RestoreApiExecutor restoreApiExecutor;
     private RestorationJob currentRestorationJob;
     Logger logger = LoggerFactory.getLogger(RestorationManager.class);
 
     public RestorationManager(BackupManager backupManager,
                               CamundaVersionService versionService,
                               BlueberryConfig blueberryConfig,
-                              Pwc87RestoreExecutor restoreExecutor) {
+                              RestoreApiExecutor restoreApiExecutor) {
         this.backupManager = backupManager;
         this.versionService = versionService;
         this.blueberryConfig = blueberryConfig;
-        this.restoreExecutor = restoreExecutor;
+        this.restoreApiExecutor = restoreApiExecutor;
+    }
+
+    /**
+     * The version Blueberry restores: Camunda 8.10, with the Restore API (REST only, no Kubernetes). For the other versions,
+     * the restore is described by the documentation.
+     */
+    static boolean canRestore(String minorVersion) {
+        return "8.10".equals(minorVersion);
     }
 
     public RestorePreflight.Result preflight(long backupId) throws OperationException {
@@ -44,20 +52,22 @@ public class RestorationManager {
 
     public boolean isLiveRestoreEnabled() {
         return blueberryConfig.isRestoreExecutionEnabled()
-                && "8.7".equals(versionService.getActiveProfile().minorVersion());
+                && canRestore(versionService.getActiveProfile().minorVersion());
     }
 
     public synchronized void startRestoration(long backupId) throws OperationException {
         CamundaVersionProfile profile = versionService.getActiveProfile();
-        if (!"8.7".equals(profile.minorVersion())) {
+        if (!canRestore(profile.minorVersion())) {
             throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400,
                     "Restore version",
-                    "Automated restore follows the PwC 8.7 runbook. Select Camunda 8.7.");
+                    "Blueberry restores Camunda 8.10 with the Restore API (REST only). Select Camunda 8.10. For "
+                            + profile.minorVersion() + ", follow the documentation: " + profile.docsRestoreUrl());
         }
         if (!blueberryConfig.isRestoreExecutionEnabled()) {
             throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400,
                     "Restore disabled",
-                    "Live restore is off. Set blueberry.restore.execution=true to stop the cluster, delete Camunda indices, delete Zeebe volumes, and restore backup " + backupId + ".");
+                    "Live restore is off. Set blueberry.restore.execution=true to let Blueberry restore backup " + backupId
+                            + ": the cluster is put in recovery mode, the data is deleted and restored.");
         }
         if (currentRestorationJob != null
                 && currentRestorationJob.getJobStatus() == RestorationJob.JOBSTATUS.INPROGRESS) {
@@ -72,11 +82,9 @@ public class RestorationManager {
 
         RestorationJob job = new RestorationJob(backupId, profile);
         currentRestorationJob = job;
-        RestoreLayout layout = RestoreLayout.from(blueberryConfig);
-
         Thread thread = new Thread(() -> {
             try {
-                job.run(restoreExecutor, layout);
+                job.run(restoreApiExecutor);
             } catch (Exception e) {
                 logger.error("Restore failed for backup {}", backupId, e);
             }

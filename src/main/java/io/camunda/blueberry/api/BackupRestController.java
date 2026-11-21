@@ -8,6 +8,7 @@ import io.camunda.blueberry.operation.OperationLog;
 import io.camunda.blueberry.operation.backup.BackupCompleteness;
 import io.camunda.blueberry.operation.backup.BackupJob;
 import io.camunda.blueberry.operation.backup.BackupManager;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.platform.version.CamundaVersionService;
 import io.camunda.blueberry.platform.version.RestorePhase;
 import org.slf4j.Logger;
@@ -27,13 +28,48 @@ public class BackupRestController {
     private final ZeebeConnect zeebeConnect;
     private final BackupManager backupManager;
     private final CamundaVersionService versionService;
+    private final OrchestrationParameter orchestrationParameter;
     Logger logger = LoggerFactory.getLogger(BackupRestController.class);
 
     public BackupRestController(ZeebeConnect zeebeConnect, BackupManager backupManager,
-                                CamundaVersionService versionService) {
+                                CamundaVersionService versionService,
+                                OrchestrationParameter orchestrationParameter) {
         this.zeebeConnect = zeebeConnect;
         this.backupManager = backupManager;
         this.versionService = versionService;
+        this.orchestrationParameter = orchestrationParameter;
+    }
+
+    /**
+     * The backup configuration of the cluster: the variables CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_CONTINUOUS, _SCHEDULE and
+     * _RETENTION_WINDOW (the actuator of Zeebe, else blueberry.orchestrationConfig).
+     * <ul>
+     *     <li>mode: CONTINUOUS or MANUAL, empty if the cluster does not say</li>
+     *     <li>schedule, retentionWindow: the values, empty if unknown</li>
+     *     <li>origin of each: ACTUATOR or CONFIG, empty if unknown</li>
+     * </ul>
+     */
+    @GetMapping(value = "/api/backup/parameter", produces = "application/json")
+    public Map<String, Object> backupParameter() {
+        // the cluster is read now
+        orchestrationParameter.refresh();
+
+        Map<String, OrchestrationParameter.Parameter> parameters = orchestrationParameter.getParameters().stream()
+                .collect(Collectors.toMap(OrchestrationParameter.Parameter::getName, p -> p));
+
+        String continuous = orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_CONTINUOUS);
+        Map<String, Object> result = new HashMap<>();
+        result.put("mode", continuous.isEmpty() ? "" : Boolean.parseBoolean(continuous) ? "CONTINUOUS" : "MANUAL");
+        result.put("modeOrigin", originOf(parameters.get(OrchestrationParameter.BACKUP_CONTINUOUS)));
+        result.put("schedule", orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_SCHEDULE));
+        result.put("scheduleOrigin", originOf(parameters.get(OrchestrationParameter.BACKUP_SCHEDULE)));
+        result.put("retentionWindow", orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_RETENTION_WINDOW));
+        result.put("retentionWindowOrigin", originOf(parameters.get(OrchestrationParameter.BACKUP_RETENTION_WINDOW)));
+        return result;
+    }
+
+    private String originOf(OrchestrationParameter.Parameter parameter) {
+        return parameter == null || parameter.getValue() == null ? "" : parameter.getOrigin().name();
     }
 
     @GetMapping(value = "/api/backup/phases", produces = "application/json")

@@ -2,7 +2,7 @@ package io.camunda.blueberry.platform.rule;
 
 
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.platform.componentconfig.ConfigZeebe;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -13,15 +13,12 @@ import java.util.List;
 @Component
 public class RuleZeebeContainer implements Rule {
     private final BlueberryConfig blueberryConfig;
-    private final AccessParameterValue accessParameterValue;
-    private final ConfigZeebe configZeebe;
+    private final OrchestrationParameter orchestrationParameter;
 
     RuleZeebeContainer(BlueberryConfig blueberryConfig,
-                       AccessParameterValue accessParameterValue,
-                       ConfigZeebe configZeebe) {
+                       OrchestrationParameter orchestrationParameter) {
         this.blueberryConfig = blueberryConfig;
-        this.accessParameterValue = accessParameterValue;
-        this.configZeebe = configZeebe;
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     @Override
@@ -62,35 +59,71 @@ public class RuleZeebeContainer implements Rule {
         RuleInfo ruleInfo = new RuleInfo(this);
         if (validRule()) {
 
-            AccessParameterValue.ResultParameter resultParameter;
+            OrchestrationParameter.ResultParameter resultParameter;
 
-            resultParameter = configZeebe.accessParameters();
-            ruleInfo.addVerificationsAssertBoolean("Container type defined: [" + resultParameter.parameters.get(ConfigZeebe.CONTAINER_CONTAINERTYPE) + "]",
-                    resultParameter.parameters.containsKey(ConfigZeebe.CONTAINER_CONTAINERTYPE),
+            resultParameter = orchestrationParameter.accessParameters();
+            // Where the values come from: the environment of Zeebe (CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_*), or the configuration
+            if (resultParameter.info != null && !resultParameter.info.isBlank()) {
+                ruleInfo.addDetails(resultParameter.info);
+            }
+            ruleInfo.addVerificationsAssertBoolean("Container type defined: [" + resultParameter.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE) + "]",
+                    resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
                     null);
 
-            if (!resultParameter.parameters.containsKey(ConfigZeebe.CONTAINER_CONTAINERTYPE)) {
-                ruleInfo.addError("Value for parameter [" + ConfigZeebe.CONTAINER_CONTAINERTYPE + "] is required");
+            if (!resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE)) {
+                ruleInfo.addError("Value for parameter [" + OrchestrationParameter.CONTAINER_CONTAINERTYPE + "] is required. Zeebe: "
+                        + "CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_STORE, readable by Blueberry in /actuator/env of Zeebe (see the details)");
                 ruleInfo.setStatus(RuleStatus.FAILED);
             }
 
             // According to the type of storage, different check
             List<String> additionalParametersToCheck = null;
-            String containerTypeValue = String.valueOf(resultParameter.parameters.get(ConfigZeebe.CONTAINER_CONTAINERTYPE));
-            if (ConfigZeebe.STORE_AZURE.equalsIgnoreCase(containerTypeValue)) {
-                additionalParametersToCheck = List.of(ConfigZeebe.AZURE_CONNECTIONSTRING, ConfigZeebe.CONTAINER_BASEPATH, ConfigZeebe.CONTAINER_BUCKETNAME);
+            String containerTypeValue = String.valueOf(resultParameter.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE));
+
+            // Elasticsearch and Zeebe use the same container: the type used to create the repository (the parameter
+            // container.containerType: the actuator, else blueberry.orchestrationConfig) must be the one of Zeebe
+            String blueberryType = orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE);
+            if (resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE) && !blueberryType.isBlank()) {
+                boolean sameType = blueberryType.equalsIgnoreCase(containerTypeValue);
+                ruleInfo.addVerificationsAssertBoolean("Container type of Zeebe [" + containerTypeValue
+                                + "] is the container type used by Blueberry for Elasticsearch [" + blueberryType + "]",
+                        sameType, null);
+                if (!sameType) {
+                    ruleInfo.addError("Zeebe backs up in [" + containerTypeValue + "] but Blueberry uses ["
+                            + blueberryType + "] (blueberry.orchestrationConfig.container.containerType): Elasticsearch and Zeebe must use the same container");
+                    ruleInfo.setStatus(RuleStatus.FAILED);
+                }
             }
-            if (ConfigZeebe.STORE_GCS.equalsIgnoreCase(containerTypeValue)) {
-                additionalParametersToCheck = List.of(ConfigZeebe.CONTAINER_BASEPATH, ConfigZeebe.CONTAINER_BUCKETNAME);
+
+            // Filesystem: Elasticsearch creates its repository in blueberry.orchestrationConfig.filesystem.path
+            if (OrchestrationParameter.STORE_FILESYSTEM.equalsIgnoreCase(containerTypeValue)) {
+                additionalParametersToCheck = List.of(OrchestrationParameter.CONTAINER_BASEPATH);
+                String elasticsearchPath = orchestrationParameter.getParameterString(OrchestrationParameter.FILESYSTEM_PATH);
+                ruleInfo.addVerificationsAssertBoolean("Directory of the Elasticsearch repository (blueberry.orchestrationConfig.filesystem.path): ["
+                                + elasticsearchPath + "]",
+                        !elasticsearchPath.isEmpty(), null);
+                if (elasticsearchPath.isEmpty()) {
+                    ruleInfo.addError("blueberry.orchestrationConfig.filesystem.path is required: the directory of the Elasticsearch repository "
+                            + "(Elasticsearch path.repo must contain it)");
+                    ruleInfo.setStatus(RuleStatus.FAILED);
+                }
             }
-            if (ConfigZeebe.STORE_S3.equalsIgnoreCase(containerTypeValue)) {
-                additionalParametersToCheck = List.of(ConfigZeebe.CONTAINER_BASEPATH, ConfigZeebe.CONTAINER_BUCKETNAME);
+            if (OrchestrationParameter.STORE_AZURE.equalsIgnoreCase(containerTypeValue)) {
+                additionalParametersToCheck = List.of(OrchestrationParameter.AZURE_CONNECTIONSTRING, OrchestrationParameter.CONTAINER_BASEPATH, OrchestrationParameter.CONTAINER_BUCKETNAME);
+            }
+            if (OrchestrationParameter.STORE_GCS.equalsIgnoreCase(containerTypeValue)) {
+                additionalParametersToCheck = List.of(OrchestrationParameter.CONTAINER_BASEPATH, OrchestrationParameter.CONTAINER_BUCKETNAME);
+            }
+            if (OrchestrationParameter.STORE_S3.equalsIgnoreCase(containerTypeValue)) {
+                additionalParametersToCheck = List.of(OrchestrationParameter.CONTAINER_BASEPATH, OrchestrationParameter.CONTAINER_BUCKETNAME);
             }
 
             if (additionalParametersToCheck != null) {
 
                 for (String parameterKey : additionalParametersToCheck) {
-                    ruleInfo.addVerificationsAssertBoolean("Parameter [" + parameterKey + "]",
+                    ruleInfo.addVerificationsAssertBoolean("Parameter [" + parameterKey + "]"
+                                    + (resultParameter.parameters.containsKey(parameterKey)
+                                    ? ": [" + resultParameter.parameters.get(parameterKey) + "]" : ""),
                             resultParameter.parameters.containsKey(parameterKey),
                             null);
 

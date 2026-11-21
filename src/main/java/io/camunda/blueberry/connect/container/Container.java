@@ -24,4 +24,11 @@ public interface Container {
      * @return
      */
     String getInformation();
+
+    /**
+     * @return what is missing in the configuration of the container, null if it is complete
+     */
+    default String getConfigurationProblem() {
+        return null;
+    }
 }

@@ -16,7 +16,7 @@ public class SecondaryStorageFactory {
     private final List<SecondaryStorageInt> secondaryStorageList;
     private final SecondaryStorageDetector secondaryStorageDetector;
 
-    SecondaryStorageFactory(List<SecondaryStorageInt> secondaryStorageList, SecondaryStorageDetector secondaryStorageDetector) {
+    public SecondaryStorageFactory(List<SecondaryStorageInt> secondaryStorageList, SecondaryStorageDetector secondaryStorageDetector) {
         this.secondaryStorageList = secondaryStorageList;
         this.secondaryStorageDetector = secondaryStorageDetector;
     }
@@ -47,7 +47,8 @@ public class SecondaryStorageFactory {
             return null;
         }
         Optional<SecondaryStorageInt> found = secondaryStorageList.stream()
-                .filter(t -> normalize(t.getName()).equals(wanted))
+                .filter(t -> normalize(t.getName()).equals(wanted)
+                        || t.getAliases().stream().anyMatch(alias -> normalize(alias).equals(wanted)))
                 .findFirst();
         return found.orElse(null);
     }
