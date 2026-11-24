@@ -42,4 +42,19 @@ class BackupRestControllerTest {
         assertEquals("", parameter.get("schedule"));
         assertEquals("", parameter.get("scheduleOrigin"));
     }
+
+    @Test
+    void theSchedulerAndTheRetentionAreBlankInManualMode() {
+        // the configuration of Blueberry gives values, but the cluster is in manual mode: they are not used
+        BackupRestController controller = new BackupRestController(null, null, null,
+                TestOrchestration.build(Map.of("backupContinuous", "false", "backupSchedule", "PT10M", "backupRetentionWindow", "P7D"), null));
+
+        Map<String, Object> parameter = controller.backupParameter();
+
+        assertEquals("MANUAL", parameter.get("mode"));
+        assertEquals("", parameter.get("schedule"));
+        assertEquals("", parameter.get("scheduleOrigin"));
+        assertEquals("", parameter.get("retentionWindow"));
+        assertEquals("", parameter.get("retentionWindowOrigin"));
+    }
 }

@@ -25,6 +25,8 @@ blueberry:
     # backupDirectory (pg_dump and pg_restore must be installed). For sqlserver, see the blueberry.sqlserver section of the
     # documentation (url, username, password, database, backupPath). With "rdbms" in the cluster, this value gives the vendor.
     secondaryStorage: elasticsearch
+    # CAMUNDA_DATA_SECONDARYSTORAGE_ELASTICSEARCH_BACKUP_REPOSITORYNAME: the Elasticsearch snapshot repository of the history backup (the same name as the cluster)
+    backupRepositoryName: camunda_zeebe_records_backup
 
     # The container used by Zeebe and by Elasticsearch (CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_STORE and the variables of its type)
     container:

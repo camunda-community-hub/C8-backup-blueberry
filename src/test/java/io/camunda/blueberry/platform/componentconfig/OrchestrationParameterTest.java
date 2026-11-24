@@ -62,4 +62,24 @@ class OrchestrationParameterTest {
         assertEquals("P7D", parameters.getParameterValue(OrchestrationParameter.BACKUP_RETENTION_WINDOW));
         parameters.getParameters().forEach(p -> assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, p.getOrigin()));
     }
+
+    @Test
+    void theKindOfRdbmsComesFromTheJdbcUrl() {
+        assertEquals("postgres", kind("rdbms", "jdbc:postgresql://db:5432/camunda"));
+        assertEquals("sqlserver", kind("RDBMS", "jdbc:sqlserver://db:1433;databaseName=camunda"));
+        assertEquals("h2", kind("rdbms", "jdbc:h2:file:./camunda-data/h2db"));
+        assertEquals("mariadb", kind("rdbms", "jdbc:mariadb://db/camunda"));
+        // no url: unknown
+        assertEquals("", kind("rdbms", ""));
+        // not rdbms: the value itself
+        assertEquals("elasticsearch", kind("elasticsearch", ""));
+    }
+
+    private static String kind(String type, String url) {
+        String env = "{\"propertySources\":[{\"name\":\"systemEnvironment\",\"properties\":{"
+                + "\"CAMUNDA_DATA_SECONDARYSTORAGE_TYPE\":{\"value\":\"" + type + "\"}"
+                + (url.isEmpty() ? "" : ",\"CAMUNDA_DATA_SECONDARYSTORAGE_RDBMS_URL\":{\"value\":\"" + url + "\"}")
+                + "}}]}";
+        return TestOrchestration.build(Map.of(), env).getSecondaryStorageKind();
+    }
 }

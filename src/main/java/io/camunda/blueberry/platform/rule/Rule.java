@@ -168,22 +168,22 @@ public interface Rule {
             if (result.accessActuator) {
                 // Everything works: this is a success, not an information
                 addVerificationsWithError(action, RuleStatus.CORRECT, envUrl,
-                        "Can access the actuator. The repository name [" + repositoryName + "] is read from " + componentName + ".");
+                        "Can access the actuator. The repository name [" + repositoryName + "] (actuator) is read from " + componentName + ".");
             } else if (result.masked) {
                 addInfo(action, envUrl,
                         "Can access the actuator, but " + componentName + " hides the values of env (******). "
-                                + "The repository name [" + repositoryName + "] comes from the blueberry configuration. "
+                                + "The repository name [" + repositoryName + "] (config) comes from the blueberry configuration. "
                                 + "To read it from the component, set management.endpoint.env.show-values to ALWAYS "
                                 + "(in the Helm values, in the 'env' of the '" + componentName.toLowerCase() + "' section):",
                         ENV_SHOW_VALUES_CONFIGURATION);
             } else if (result.envReachable) {
                 addInfo(action, envUrl,
                         "Can access the actuator, but the variable of the repository name is not defined in " + componentName
-                                + ". The repository name [" + repositoryName + "] comes from the blueberry configuration.");
+                                + ". The repository name [" + repositoryName + "] (config) comes from the blueberry configuration.");
             } else {
                 addInfo(action, envUrl,
                         "Can't access the actuator (it is optional). The repository name [" + repositoryName
-                                + "] comes from the blueberry configuration. Expose 'env' on " + componentName
+                                + "] (config) comes from the blueberry configuration. Expose 'env' on " + componentName
                                 + " to read the value from the component (in the Helm values, in the 'env' of the '"
                                 + componentName.toLowerCase() + "' section):",
                         ENV_SHOW_VALUES_CONFIGURATION

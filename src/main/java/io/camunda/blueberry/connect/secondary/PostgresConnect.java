@@ -1,5 +1,6 @@
 package io.camunda.blueberry.connect.secondary;
 
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.connect.BackupInfo;
 import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.exception.BackupException;
@@ -73,7 +74,7 @@ public class PostgresConnect implements SecondaryStorageInt {
     private static final int MAX_OUTPUT = 4000;
 
     private final Logger logger = LoggerFactory.getLogger(PostgresConnect.class);
-    private final SecondaryStorageDetector secondaryStorageDetector;
+    private final OrchestrationParameter orchestrationParameter;
     private final Map<Long, CompletableFuture<Void>> runningBackups = new ConcurrentHashMap<>();
 
     @Value("${blueberry.postgres.host:localhost}")
@@ -93,8 +94,8 @@ public class PostgresConnect implements SecondaryStorageInt {
     @Value("${blueberry.postgres.pgRestore:pg_restore}")
     private String pgRestore;
 
-    public PostgresConnect(SecondaryStorageDetector secondaryStorageDetector) {
-        this.secondaryStorageDetector = secondaryStorageDetector;
+    public PostgresConnect(OrchestrationParameter orchestrationParameter) {
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     @Override
@@ -112,7 +113,7 @@ public class PostgresConnect implements SecondaryStorageInt {
      */
     @Override
     public boolean isActive() {
-        String value = SecondaryStorageFactory.normalize(secondaryStorageDetector.detect().value());
+        String value = SecondaryStorageFactory.normalize(orchestrationParameter.getSecondaryStorageKind());
         return value.equals(SecondaryStorageFactory.normalize(NAME)) || value.equals("postgresql");
     }
 

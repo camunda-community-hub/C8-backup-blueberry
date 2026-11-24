@@ -24,9 +24,11 @@ public class RuleOptimizeRepository implements Rule {
     private final ElasticSearchConnect elasticSearchConnect;
 
     private final OrchestrationParameter orchestrationParameter;
+    private final OptimizeConnect optimizeConnect;
 
     RuleOptimizeRepository(BlueberryConfig blueberryConfig, ElasticSearchConnect elasticSearchConnect,
-                           OrchestrationParameter orchestrationParameter) {
+                           OrchestrationParameter orchestrationParameter, OptimizeConnect optimizeConnect) {
+        this.optimizeConnect = optimizeConnect;
         this.blueberryConfig = blueberryConfig;
         this.elasticSearchConnect = elasticSearchConnect;
         this.orchestrationParameter = orchestrationParameter;
@@ -34,8 +36,8 @@ public class RuleOptimizeRepository implements Rule {
 
     @Override
     public boolean validRule() {
-        // is Optimize enabled and defined in the cluster?
-        return blueberryConfig.isOptimizeEnabled() && blueberryConfig.getOptimizeActuatorUrl() != null;
+        // is Optimize in the cluster? The cluster answers first (its actuator), then blueberry.optimize.enabled
+        return optimizeConnect.isActive();
     }
 
     @Override
@@ -74,6 +76,8 @@ public class RuleOptimizeRepository implements Rule {
         RuleInfo ruleInfo = new RuleInfo(this);
 
         if (!validRule()) {
+            // Optimize is disabled or has no URL: nothing to check (the status would stay "in progress")
+            ruleInfo.setStatus(RuleStatus.DEACTIVATED);
             return ruleInfo;
         }
 
@@ -98,14 +102,15 @@ public class RuleOptimizeRepository implements Rule {
             ruleInfo.setStatus(RuleStatus.FAILED);
         }
 
-        ruleInfo.addVerificationsAssertBoolean("Access pod repository, retrieve [" + optimizeRepository + "]", optimizeRepository != null, "From Configuration");
+        String repositoryOrigin = resultParameter.accessActuator ? "actuator" : "config";
+        ruleInfo.addVerificationsAssertBoolean("Access pod repository, retrieve [" + optimizeRepository + "] (" + repositoryOrigin + ")", optimizeRepository != null, "From Configuration");
 
 
         //------------ Second step, verify if the repository exists in elasticSearch
         if (ruleInfo.inProgress()) {
             OperationResult operationResult = elasticSearchConnect.existRepository(optimizeRepository);
             accessElasticsearchRepository = operationResult.resultBoolean;
-            ruleInfo.addVerificationsButWillBeFixed("Check Elasticsearch repository [" + optimizeRepository + "] :"
+            ruleInfo.addVerificationsButWillBeFixed("Check Elasticsearch repository [" + optimizeRepository + "] (" + repositoryOrigin + ") :"
                             + operationResult.details,
                     accessElasticsearchRepository ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);
@@ -136,8 +141,8 @@ public class RuleOptimizeRepository implements Rule {
                 ruleInfo.setStatus(RuleStatus.FAILED);
             }
             ruleInfo.addVerifications("Check Elasticsearch repository [" + optimizeRepository
-                            + "] basePath[" + blueberryConfig.getOptimizeContainerBasePath()
-                            + "] " + operationResult.details,
+                            + "] (" + repositoryOrigin + ") basePath[" + blueberryConfig.getOptimizeContainerBasePath()
+                            + "] (config) " + operationResult.details,
                     operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                     operationResult.command);
 

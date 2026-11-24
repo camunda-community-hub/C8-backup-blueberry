@@ -22,7 +22,7 @@ class ContainerFilesystemTest {
      * The path is in blueberry.orchestrationConfig.filesystem.path, the actuator does not answer
      */
     private static OrchestrationParameter config(String path) {
-        return TestOrchestration.build(Map.of(OrchestrationParameter.FILESYSTEM_PATH, path), null);
+        return TestOrchestration.build(Map.of(OrchestrationParameter.FILESYSTEM_PATH.name(), path), null);
     }
 
     @Test

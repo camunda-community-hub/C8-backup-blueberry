@@ -75,7 +75,7 @@ public class RuleZeebeRecordRepository implements Rule {
                 // now check if the repository exists in Elastic search
                 OperationResult operationResult = elasticSearchConnect.existRepository(blueberryConfig.getZeebeRecordRepository());
                 accessElasticsearchRepository = operationResult.resultBoolean;
-                ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository() + "] :"
+                ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository() + "] (config) :"
                                 + operationResult.details,
                         accessElasticsearchRepository ? RuleStatus.CORRECT :execute? RuleStatus.FAILEDBUTWILLBEFIXED: RuleStatus.FAILED,
                         operationResult.command);
@@ -105,8 +105,9 @@ public class RuleZeebeRecordRepository implements Rule {
                     ruleInfo.setStatus(RuleStatus.FAILED);
                 }
                 ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository()
-                                + "] ContainerType[" + orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE)
-                                + "] basePath[" + blueberryConfig.getZeebeRecordContainerBasePath() + "]",
+                                + "] (config) ContainerType[" + orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE)
+                                + "] (" + originOf(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name())
+                                + ") basePath[" + blueberryConfig.getZeebeRecordContainerBasePath() + "] (config)",
                         operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
                         operationResult.command);
 
@@ -116,5 +117,13 @@ public class RuleZeebeRecordRepository implements Rule {
             ruleInfo.setStatus(RuleStatus.CORRECT);
         }
         return ruleInfo;
+    }
+
+    /**
+     * @return where the value of the parameter comes from: actuator or config
+     */
+    private String originOf(String parameterName) {
+        OrchestrationParameter.Parameter parameter = orchestrationParameter.getParameter(parameterName);
+        return parameter == null ? "config" : parameter.getOriginLabel();
     }
 }

@@ -5,7 +5,8 @@ import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.BackupInfo;
 import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.connect.ZeebeRestApi;
-import io.camunda.blueberry.connect.secondary.TestDetector;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.TestOrchestration;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.exception.BackupException;
@@ -19,6 +20,7 @@ import org.springframework.web.client.RestTemplate;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -176,7 +178,7 @@ class RestoreApiExecutorTest {
     }
 
     private static RestoreApiExecutor executor(FakeRest rest, FakeStorage storage, BooleanSupplier optimizeRunning) {
-        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(storage), TestDetector.detector("fake", null));
+        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(storage), TestOrchestration.build(Map.of(OrchestrationParameter.SECONDARY_STORAGE.name(), "fake"), null));
         return new RestoreApiExecutor(rest, factory, optimizeRunning, 1, 5);
     }
 

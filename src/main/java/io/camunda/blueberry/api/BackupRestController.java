@@ -57,14 +57,15 @@ public class BackupRestController {
         Map<String, OrchestrationParameter.Parameter> parameters = orchestrationParameter.getParameters().stream()
                 .collect(Collectors.toMap(OrchestrationParameter.Parameter::getName, p -> p));
 
-        String continuous = orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_CONTINUOUS);
         Map<String, Object> result = new HashMap<>();
-        result.put("mode", continuous.isEmpty() ? "" : Boolean.parseBoolean(continuous) ? "CONTINUOUS" : "MANUAL");
-        result.put("modeOrigin", originOf(parameters.get(OrchestrationParameter.BACKUP_CONTINUOUS)));
-        result.put("schedule", orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_SCHEDULE));
-        result.put("scheduleOrigin", originOf(parameters.get(OrchestrationParameter.BACKUP_SCHEDULE)));
-        result.put("retentionWindow", orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_RETENTION_WINDOW));
-        result.put("retentionWindowOrigin", originOf(parameters.get(OrchestrationParameter.BACKUP_RETENTION_WINDOW)));
+        result.put("mode", orchestrationParameter.getBackupMode());
+        result.put("modeOrigin", originOf(parameters.get(OrchestrationParameter.BACKUP_CONTINUOUS.name())));
+        // The scheduler and the retention period belong to the continuous mode: they are blank in manual mode
+        boolean manual = OrchestrationParameter.BACKUP_MODE_MANUAL.equals(orchestrationParameter.getBackupMode());
+        result.put("schedule", manual ? "" : orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_SCHEDULE));
+        result.put("scheduleOrigin", manual ? "" : originOf(parameters.get(OrchestrationParameter.BACKUP_SCHEDULE.name())));
+        result.put("retentionWindow", manual ? "" : orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_RETENTION_WINDOW));
+        result.put("retentionWindowOrigin", manual ? "" : originOf(parameters.get(OrchestrationParameter.BACKUP_RETENTION_WINDOW.name())));
         return result;
     }
 
@@ -100,7 +101,7 @@ public class BackupRestController {
     public Map<String, Object> startBackup(@RequestBody BackupManager.BackupParameter backupParameter) {
         // Return the backupId if no one was given
 
-        logger.info("Rest [/api/backup/start] nextId[{}] backupId[{}]", backupParameter.nextId, backupParameter.backupId);
+        logger.info("Rest [/api/backup/start] policy[{}] nextId[{}] backupId[{}]", backupParameter.backupPolicy, backupParameter.nextId, backupParameter.backupId);
         try {
             backupManager.startBackup(backupParameter);
         } catch (OperationException e) {

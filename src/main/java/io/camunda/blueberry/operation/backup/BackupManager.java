@@ -68,7 +68,7 @@ public class BackupManager {
                 break;
 
             case BACKUPIDPOLICY.TIMEBACKUP:
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyddMMHHss");
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
                 String backupIdSt = ZonedDateTime.now(ZoneId.of(ZoneOffset.UTC.getId())).format(formatter);
                 backupId = Long.parseLong(backupIdSt);
                 logger.info("TIMEBACKUP policy: calculate from the list +1 : {}", backupId);
@@ -122,8 +122,8 @@ public class BackupManager {
     public ListBackupResult getListBackups() throws OperationException {
         ListBackupResult listBackupResult = new ListBackupResult();
         for (BackupComponentInt backupComponent : listBackupComponents) {
-            // Only the secondary storage of the cluster is explored
-            if (backupComponent instanceof SecondaryStorageInt && !backupComponent.isActive()) {
+            // Only the components of the cluster are explored: Optimize is optional, the secondary storage is the one of the cluster
+            if (!backupComponent.isActive()) {
                 continue;
             }
             try {

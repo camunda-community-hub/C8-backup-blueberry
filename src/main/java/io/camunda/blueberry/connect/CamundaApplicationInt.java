@@ -5,7 +5,11 @@ package io.camunda.blueberry.connect;
  * Operate and Tasklist are no longer separate applications since 8.10: their data is in the RDBMS, backed up with Zeebe.
  */
 public interface CamundaApplicationInt extends BackupComponentInt {
+    /**
+     * @return true if the application is part of the cluster (configured, so Blueberry must back it up)
+     */
     boolean exist();
+
 
     /**
      * Return the component behind this application

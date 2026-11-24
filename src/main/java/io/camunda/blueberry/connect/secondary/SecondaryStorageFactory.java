@@ -1,5 +1,6 @@
 package io.camunda.blueberry.connect.secondary;
 
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,27 +15,35 @@ import java.util.Optional;
 public class SecondaryStorageFactory {
 
     private final List<SecondaryStorageInt> secondaryStorageList;
-    private final SecondaryStorageDetector secondaryStorageDetector;
+    private final OrchestrationParameter orchestrationParameter;
 
-    public SecondaryStorageFactory(List<SecondaryStorageInt> secondaryStorageList, SecondaryStorageDetector secondaryStorageDetector) {
+    public SecondaryStorageFactory(List<SecondaryStorageInt> secondaryStorageList, OrchestrationParameter orchestrationParameter) {
         this.secondaryStorageList = secondaryStorageList;
-        this.secondaryStorageDetector = secondaryStorageDetector;
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     /**
-     * The secondary storage of the cluster: detected on the cluster, else given by the configuration
+     * The secondary storage of the cluster: the parameter secondaryStorage (the actuator of Zeebe, else the configuration)
      *
-     * @return the object, null if the secondary storage is unknown or if there is no implementation for it
+     * @return the parameter: its value (null if unknown) and its origin
+     */
+    public OrchestrationParameter.Parameter getValue() {
+        return orchestrationParameter.getParameter(OrchestrationParameter.SECONDARY_STORAGE);
+    }
+
+    /**
+     * @return the value of the secondary storage as a text, empty if it is unknown
+     */
+    public String getValueString() {
+        return orchestrationParameter.getParameterString(OrchestrationParameter.SECONDARY_STORAGE);
+    }
+
+    /**
+     * @return the object in charge of the secondary storage of the cluster, null if it is unknown or if there is no implementation for it.
+     * For "rdbms", the vendor is read in the JDBC url of the cluster (see OrchestrationParameter.getSecondaryStorageKind)
      */
     public SecondaryStorageInt getSecondaryStorage() {
-        return getSecondaryStorage(secondaryStorageDetector.detect().value());
-    }
-
-    /**
-     * What is known on the secondary storage: the detected value, the configured value, the one used
-     */
-    public SecondaryStorageDetector.Detection detect() {
-        return secondaryStorageDetector.detect();
+        return getSecondaryStorage(orchestrationParameter.getSecondaryStorageKind());
     }
 
     /**

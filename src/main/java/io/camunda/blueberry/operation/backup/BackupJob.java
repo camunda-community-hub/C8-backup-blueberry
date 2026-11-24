@@ -1,7 +1,7 @@
 package io.camunda.blueberry.operation.backup;
 
 import io.camunda.blueberry.connect.*;
-import io.camunda.blueberry.connect.secondary.SecondaryStorageDetector;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.exception.BackupException;
@@ -75,7 +75,8 @@ public class BackupJob {
 
         // The secondary storage object is a component like the others
         SecondaryStorageInt secondaryStorage = secondaryStorageFactory.getSecondaryStorage();
-        SecondaryStorageDetector.Detection detection = secondaryStorageFactory.detect();
+        OrchestrationParameter.Parameter secondaryStorageParameter = secondaryStorageFactory.getValue();
+        String secondaryStorageValue = secondaryStorageFactory.getValueString();
 
         boolean exportingPaused = false;
         try {
@@ -86,7 +87,7 @@ public class BackupJob {
 
             // 2. Start the backup of each application
             List<CamundaApplicationInt> listActivesApplication = new ArrayList<>();
-            operationLog.operationStep(null, "Start the backup of the applications");
+            operationLog.operationStep(null, "Start the backup of "+listActivesApplication.size()+" applications");
             for (CamundaApplicationInt application : listApplications) {
                 if (!application.isActive()) {
                     operationLog.info(application.getComponent(), "Application " + application.getComponent().name() + " is not active, skip it");
@@ -99,23 +100,23 @@ public class BackupJob {
             }
 
             // 3. Start the backup of the secondary storage
-            operationLog.operationStep(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Backup of the secondary storage");
+            operationLog.operationStep(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Backup-secondary-storage");
             boolean secondaryStorageBackedUp = false;
             if (secondaryStorage != null && secondaryStorage.isActive()) {
                 operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Secondary storage [" + secondaryStorage.getName()
-                        + "] (" + detection.source() + ")");
+                        + "] (" + secondaryStorageParameter.getOriginLabel() + ")");
                 checkStarted(secondaryStorage, secondaryStorage.backup(backupId, operationLog));
                 secondaryStorageBackedUp = true;
             } else if (secondaryStorage != null) {
                 operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Secondary storage [" + secondaryStorage.getName()
                         + "] is not active (see the configuration), skip it");
-            } else if (!detection.value().isEmpty()) {
+            } else if (!secondaryStorageValue.isEmpty()) {
                 // A storage is declared, but nothing can back it up: the backup would be incomplete
                 this.jobStatus = JOBSTATUS.FAILED;
                 throw new BackupException(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, 400,
-                        "No backup for the secondary storage [" + detection.value() + "]",
-                        "Blueberry does not know how to back up the secondary storage [" + detection.value()
-                                + "] (" + detection.source() + "). Supported: "
+                        "No backup for the secondary storage [" + secondaryStorageValue + "]",
+                        "Blueberry does not know how to back up the secondary storage [" + secondaryStorageValue
+                                + "] (" + secondaryStorageParameter.getOriginLabel() + "). Supported: "
                                 + String.join(", ", secondaryStorageFactory.getSupportedNames()), backupId);
             } else {
                 operationLog.warning(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "The secondary storage is unknown (not detected, "

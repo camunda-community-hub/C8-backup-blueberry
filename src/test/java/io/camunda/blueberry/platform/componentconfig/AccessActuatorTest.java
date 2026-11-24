@@ -35,7 +35,7 @@ class AccessActuatorTest {
 
         assertTrue(result.reachable());
         assertFalse(result.masked());
-        assertEquals("FILESYSTEM", result.values().get(OrchestrationParameter.CONTAINER_CONTAINERTYPE));
+        assertEquals("FILESYSTEM", result.values().get(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()));
         assertEquals("/usr/local/camunda/backups/zeebe", result.values().get("filesystem.basePath"));
         // not defined: not in the result
         assertNull(result.values().get("gcs.bucketName"));
@@ -47,7 +47,7 @@ class AccessActuatorTest {
 
         OrchestrationParameter.ResultParameter parameters = OrchestrationParameter.fullFillFromEnvironment(new OrchestrationParameter.ResultParameter(), result.values());
 
-        assertEquals("FILESYSTEM", parameters.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE));
+        assertEquals("FILESYSTEM", parameters.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()));
         assertEquals("/usr/local/camunda/backups/zeebe", parameters.parameters.get(OrchestrationParameter.CONTAINER_BASEPATH));
         // a filesystem has no bucket
         assertFalse(parameters.parameters.containsKey(OrchestrationParameter.CONTAINER_BUCKETNAME));
@@ -64,7 +64,7 @@ class AccessActuatorTest {
         AccessActuator.Result result = AccessActuator.parse(properties, OrchestrationParameter.ENVIRONMENT);
 
         OrchestrationParameter.ResultParameter parameters = OrchestrationParameter.fullFillFromEnvironment(new OrchestrationParameter.ResultParameter(), result.values());
-        assertEquals("GCS", parameters.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE));
+        assertEquals("GCS", parameters.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()));
         assertEquals("my-bucket", parameters.parameters.get(OrchestrationParameter.CONTAINER_BUCKETNAME));
         assertEquals("zeebe", parameters.parameters.get(OrchestrationParameter.CONTAINER_BASEPATH));
     }
@@ -77,7 +77,7 @@ class AccessActuatorTest {
                   "ZEEBE_BROKER_DATA_BACKUP_S3_BUCKETNAME":{"value":"b"}}}]}
                 """;
         AccessActuator.Result result = AccessActuator.parse(legacy, OrchestrationParameter.ENVIRONMENT);
-        assertEquals("S3", result.values().get(OrchestrationParameter.CONTAINER_CONTAINERTYPE));
+        assertEquals("S3", result.values().get(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()));
         assertEquals("b", result.values().get("s3.bucketName"));
     }
 
@@ -96,5 +96,15 @@ class AccessActuatorTest {
         AccessActuator.Result result = AccessActuator.parse("<html>", Map.of("store", java.util.List.of("A")));
         assertTrue(result.values().isEmpty());
         assertFalse(result.note().isEmpty());
+    }
+
+    @Test
+    void theSourceWithTheHighestPriorityWins() {
+        // the environment variable (elasticsearch) overrides the configuration file (rdbms), whatever the order of the names
+        String env = "{\"propertySources\":["
+                + "{\"name\":\"systemEnvironment\",\"properties\":{\"CAMUNDA_DATA_SECONDARYSTORAGE_TYPE\":{\"value\":\"elasticsearch\"}}},"
+                + "{\"name\":\"config/application.yaml\",\"properties\":{\"camunda.data.secondary-storage.type\":{\"value\":\"rdbms\"}}}]}";
+        AccessActuator.Result result = AccessActuator.parse(env, OrchestrationParameter.ENVIRONMENT);
+        assertEquals("elasticsearch", result.values().get(OrchestrationParameter.SECONDARY_STORAGE.name()));
     }
 }

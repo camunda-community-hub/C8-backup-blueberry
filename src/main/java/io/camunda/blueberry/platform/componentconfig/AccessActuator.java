@@ -129,24 +129,26 @@ public class AccessActuator {
         try {
             JsonNode propertySources = new ObjectMapper().readTree(body == null ? "{}" : body).path("propertySources");
             for (Map.Entry<String, List<String>> request : wanted.entrySet()) {
-                for (String name : request.getValue()) {
-                    String found = null;
-                    for (JsonNode propertySource : propertySources) {
+                // The property sources are listed by priority (the environment variables before the configuration files):
+                // the first source which defines one of the names gives the value. Searching name by name would give the
+                // value of a configuration file even when an environment variable overrides it.
+                search:
+                for (JsonNode propertySource : propertySources) {
+                    for (String name : request.getValue()) {
                         JsonNode property = propertySource.path("properties").path(name);
                         if (property.isMissingNode()) {
                             continue;
                         }
                         String value = property.path("value").asText("");
                         if (MASKED_VALUE.equals(value)) {
+                            // hidden at the highest priority: a value of a lower source would not be the effective one
                             masked = true;
-                        } else if (!value.isEmpty()) {
-                            found = value.trim();
+                            break search;
                         }
-                        break;
-                    }
-                    if (found != null) {
-                        values.put(request.getKey(), found);
-                        break;
+                        if (!value.isEmpty()) {
+                            values.put(request.getKey(), value.trim());
+                            break search;
+                        }
                     }
                 }
             }

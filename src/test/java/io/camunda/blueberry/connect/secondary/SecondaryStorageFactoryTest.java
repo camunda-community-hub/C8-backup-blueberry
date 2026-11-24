@@ -1,16 +1,16 @@
 package io.camunda.blueberry.connect.secondary;
 
-import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.BackupInfo;
 import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.TestOrchestration;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -58,16 +58,18 @@ class SecondaryStorageFactoryTest {
     }
 
     /**
-     * Zeebe answers the /actuator/env with the given JSON (null: the call fails)
+     * Zeebe answers the /actuator/env with the given JSON (null: the call fails). configured: blueberry.orchestrationConfig.secondaryStorage
      */
-    private static SecondaryStorageDetector detector(String configured, String envJson) {
-        return TestDetector.detector(configured, envJson);
+    private static OrchestrationParameter parameters(String configured, String envJson) {
+        Map<String, String> configuration = configured.isEmpty() ? Map.of() : Map.of(OrchestrationParameter.SECONDARY_STORAGE.name(), configured);
+        return TestOrchestration.build(configuration, envJson);
     }
 
     private static final String ENV_ELASTICSEARCH = "{\"propertySources\":[{\"name\":\"systemEnvironment\",\"properties\":{"
             + "\"CAMUNDA_DATA_SECONDARYSTORAGE_TYPE\":{\"value\":\"elasticsearch\"}}}]}";
     private static final String ENV_RDBMS = "{\"propertySources\":[{\"name\":\"applicationConfig\",\"properties\":{"
-            + "\"camunda.data.secondary-storage.type\":{\"value\":\"rdbms\"}}}]}";
+            + "\"camunda.data.secondary-storage.type\":{\"value\":\"rdbms\"},"
+            + "\"camunda.data.secondary-storage.rdbms.url\":{\"value\":\"jdbc:sqlserver://db:1433;databaseName=camunda\"}}}]}";
     private static final String ENV_MASKED = "{\"propertySources\":[{\"name\":\"systemEnvironment\",\"properties\":{"
             + "\"CAMUNDA_DATA_SECONDARYSTORAGE_TYPE\":{\"value\":\"******\"}}}]}";
 
@@ -75,7 +77,7 @@ class SecondaryStorageFactoryTest {
     void nameIsMatchedWhateverTheCaseAndTheSeparators() {
         SecondaryStorageInt elasticsearch = new FakeStorage("ElasticSearch");
         SecondaryStorageInt sqlServer = new FakeStorage("SqlServer");
-        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(elasticsearch, sqlServer), detector("", null));
+        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(elasticsearch, sqlServer), parameters("", null));
 
         assertSame(elasticsearch, factory.getSecondaryStorage("elasticsearch"));
         assertSame(elasticsearch, factory.getSecondaryStorage("ELASTIC-SEARCH"));
@@ -90,42 +92,44 @@ class SecondaryStorageFactoryTest {
     @Test
     void theClusterGivesTheSecondaryStorage() {
         SecondaryStorageInt elasticsearch = new FakeStorage("ElasticSearch");
-        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(elasticsearch), detector("", ENV_ELASTICSEARCH));
+        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(elasticsearch), parameters("", ENV_ELASTICSEARCH));
 
-        SecondaryStorageDetector.Detection detection = factory.detect();
-        assertEquals("elasticsearch", detection.value());
-        assertEquals(SecondaryStorageDetector.SOURCE_CLUSTER, detection.source());
+        assertEquals("elasticsearch", factory.getValueString());
+        assertEquals(OrchestrationParameter.Parameter.Origin.ACTUATOR, factory.getValue().getOrigin());
+        assertEquals("actuator", factory.getValue().getOriginLabel());
         assertSame(elasticsearch, factory.getSecondaryStorage());
     }
 
     @Test
-    void theConfigurationIsTheOptionBWhenTheClusterDoesNotAnswer() {
-        SecondaryStorageDetector.Detection detection = detector("sqlserver", null).detect();
-        assertEquals("sqlserver", detection.value());
-        assertEquals(SecondaryStorageDetector.SOURCE_CONFIGURATION, detection.source());
-        assertEquals("", detection.detected());
+    void theConfigurationIsUsedWhenTheClusterDoesNotAnswer() {
+        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(), parameters("sqlserver", null));
+        assertEquals("sqlserver", factory.getValueString());
+        assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, factory.getValue().getOrigin());
     }
 
     @Test
     void hiddenValuesAreNotAnAnswer() {
-        SecondaryStorageDetector.Detection detection = detector("elasticsearch", ENV_MASKED).detect();
-        assertEquals("", detection.detected());
-        assertEquals("elasticsearch", detection.value());
-        assertEquals(SecondaryStorageDetector.SOURCE_CONFIGURATION, detection.source());
+        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(), parameters("elasticsearch", ENV_MASKED));
+        assertEquals("elasticsearch", factory.getValueString());
+        assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, factory.getValue().getOrigin());
     }
 
     @Test
-    void rdbmsNeedsTheVendorOfTheConfiguration() {
-        SecondaryStorageDetector.Detection detection = detector("sqlserver", ENV_RDBMS).detect();
-        assertEquals("rdbms", detection.detected());
-        assertEquals("sqlserver", detection.value());
-        assertEquals(SecondaryStorageDetector.SOURCE_CONFIGURATION, detection.source());
+    void rdbmsIsTheValueOfTheClusterAndTheJdbcUrlGivesTheDatabase() {
+        SecondaryStorageInt sqlServer = new FakeStorage("SqlServer");
+        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(sqlServer), parameters("", ENV_RDBMS));
+        // the value is the one of the cluster
+        assertEquals("rdbms", factory.getValueString());
+        assertEquals(OrchestrationParameter.Parameter.Origin.ACTUATOR, factory.getValue().getOrigin());
+        // the object is the one of the database in the JDBC url
+        assertSame(sqlServer, factory.getSecondaryStorage());
     }
 
     @Test
     void nothingKnown() {
-        SecondaryStorageDetector.Detection detection = detector("", null).detect();
-        assertEquals("", detection.value());
-        assertEquals(SecondaryStorageDetector.SOURCE_NONE, detection.source());
+        SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(), parameters("", null));
+        assertEquals("", factory.getValueString());
+        assertNull(factory.getValue().getValue());
+        assertNull(factory.getSecondaryStorage());
     }
 }

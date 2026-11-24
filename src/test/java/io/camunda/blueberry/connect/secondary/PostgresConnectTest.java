@@ -1,5 +1,7 @@
 package io.camunda.blueberry.connect.secondary;
 
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.TestOrchestration;
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.BackupInfo;
 import org.junit.jupiter.api.Test;
@@ -10,6 +12,7 @@ import org.springframework.web.client.RestTemplate;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,7 +26,7 @@ class PostgresConnectTest {
      * Postgres is the secondary storage given by the configuration (the actuator does not answer)
      */
     private static PostgresConnect connect(String configuredStorage, String directory) {
-        PostgresConnect connect = new PostgresConnect(TestDetector.detector(configuredStorage, null));
+        PostgresConnect connect = new PostgresConnect(TestOrchestration.build(Map.of(OrchestrationParameter.SECONDARY_STORAGE.name(), configuredStorage), null));
         TestFields.set(connect, "host", "db.example.com");
         TestFields.set(connect, "port", 5433);
         TestFields.set(connect, "database", "camunda");

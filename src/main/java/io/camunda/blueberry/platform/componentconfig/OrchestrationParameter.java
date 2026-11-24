@@ -22,15 +22,12 @@ import java.util.Map;
  */
 @Component
 public class OrchestrationParameter {
-    public static final String CONTAINER_CONTAINERTYPE = "container.containerType";
+    /**
+     * The keys of the normalized result of accessParameters() (ResultParameter): they are not parameters of the cluster
+     */
     public static final String CONTAINER_BUCKETNAME = "container.bucketName";
     public static final String CONTAINER_BASEPATH = "container.basePath";
     public static final String AZURE_CONNECTIONSTRING = "ZEEBE_BROKER_DATA_BACKUP_AZURE_CONNECTIONSTRING";
-    public static final List<String> PARAMETERS_KEYS = List.of(
-            CONTAINER_CONTAINERTYPE,
-            "backupStore",
-            "container.azure.connectionString"
-    );
     public static final String STORE_GCS = "GCS";
     public static final String STORE_S3 = "S3";
     public static final String STORE_AZURE = "AZURE";
@@ -43,59 +40,122 @@ public class OrchestrationParameter {
     static final String ENV_PREFIX = "CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_";
     static final String LEGACY_PREFIX = "ZEEBE_BROKER_DATA_BACKUP_";
     static final String PROPERTY_PREFIX = "camunda.data.primary-storage.backup.";
-    public static final String FILESYSTEM_BASEPATH = "filesystem.basePath";
-    /**
-     * The directory of the Elasticsearch repository (type fs), as Elasticsearch sees it. Only in the configuration:
-     * it is not a variable of Zeebe
-     */
-    public static final String FILESYSTEM_PATH = "filesystem.path";
-    public static final String GCS_BUCKETNAME = "gcs.bucketName";
-    public static final String GCS_BASEPATH = "gcs.basePath";
-    public static final String S3_BUCKETNAME = "s3.bucketName";
-    public static final String S3_BASEPATH = "s3.basePath";
-    public static final String S3_REGION = "s3.region";
-    public static final String AZURE_CONTAINERNAME = "azure.containerName";
-    public static final String AZURE_BASEPATH = "azure.basePath";
-    /**
-     * The secondary storage of the cluster: elasticsearch, opensearch, rdbms... (camunda.data.secondary-storage.type)
-     */
-    public static final String SECONDARY_STORAGE = "secondaryStorage";
-    public static final String BACKUP_CONTINUOUS = "backupContinuous";
-    public static final String BACKUP_SCHEDULE = "backupSchedule";
-    public static final String BACKUP_CHECKPOINT_INTERVAL = "backupCheckpointInterval";
-    public static final String BACKUP_RETENTION_WINDOW = "backupRetentionWindow";
 
     /**
-     * Where the fallback values are in the application.yaml. The name of a parameter is the end of the key:
-     * blueberry.orchestrationConfig.container.containerType, blueberry.orchestrationConfig.backupSchedule, ...
+     * Where the fallback values are in the application.yaml: blueberry.orchestrationConfig.{blueberryConfig of the parameter}
      */
     public static final String CONFIG_PREFIX = "blueberry.orchestrationConfig.";
 
     /**
-     * For each parameter (the key), the names searched in /actuator/env: the first one found wins
+     * The definition of a parameter: how to find it in the actuator, and how to find it in the Blueberry configuration. The two
+     * names are independent: the actuator calls it camunda.data.secondary-storage.type, the YAML of Blueberry secondaryStorage.
+     */
+    public static final class ParameterDefinition {
+        private final List<String> actuatorNames;
+        private final String blueberryConfig;
+
+        /**
+         * @param actuatorNames   the names searched in /actuator/env (the variable, the property): the first one found wins. Empty: the
+         *                        parameter does not exist in the cluster, it comes from the configuration only
+         * @param blueberryConfig the key in blueberry.orchestrationConfig of the application.yaml. It is also the name of the parameter
+         */
+        public ParameterDefinition(List<String> actuatorNames, String blueberryConfig) {
+            this.actuatorNames = List.copyOf(actuatorNames);
+            this.blueberryConfig = blueberryConfig;
+        }
+
+        /**
+         * @return the name of the parameter: the key used to get it (getParameter, getParameterValue)
+         */
+        public String name() {
+            return blueberryConfig;
+        }
+
+        public List<String> actuatorNames() {
+            return actuatorNames;
+        }
+
+        public String blueberryConfig() {
+            return blueberryConfig;
+        }
+
+        @Override
+        public String toString() {
+            return blueberryConfig;
+        }
+    }
+
+    public static final ParameterDefinition CONTAINER_CONTAINERTYPE = new ParameterDefinition(
+            List.of(ENV_PREFIX + "STORE", LEGACY_PREFIX + "STORE", PROPERTY_PREFIX + "store"), "container.containerType");
+    public static final ParameterDefinition FILESYSTEM_BASEPATH = new ParameterDefinition(
+            List.of(ENV_PREFIX + "FILESYSTEM_BASEPATH", LEGACY_PREFIX + "FILESYSTEM_BASEPATH", PROPERTY_PREFIX + "filesystem.base-path"), "filesystem.basePath");
+    /**
+     * The directory of the Elasticsearch repository (type fs), as Elasticsearch sees it. Only in the configuration:
+     * it is not a variable of Zeebe
+     */
+    public static final ParameterDefinition FILESYSTEM_PATH = new ParameterDefinition(List.of(), "filesystem.path");
+    public static final ParameterDefinition GCS_BUCKETNAME = new ParameterDefinition(
+            List.of(ENV_PREFIX + "GCS_BUCKETNAME", LEGACY_PREFIX + "GCS_BUCKETNAME", PROPERTY_PREFIX + "gcs.bucket-name"), "gcs.bucketName");
+    public static final ParameterDefinition GCS_BASEPATH = new ParameterDefinition(
+            List.of(ENV_PREFIX + "GCS_BASEPATH", LEGACY_PREFIX + "GCS_BASEPATH", PROPERTY_PREFIX + "gcs.base-path"), "gcs.basePath");
+    public static final ParameterDefinition S3_BUCKETNAME = new ParameterDefinition(
+            List.of(ENV_PREFIX + "S3_BUCKETNAME", LEGACY_PREFIX + "S3_BUCKETNAME", PROPERTY_PREFIX + "s3.bucket-name"), "s3.bucketName");
+    public static final ParameterDefinition S3_BASEPATH = new ParameterDefinition(
+            List.of(ENV_PREFIX + "S3_BASEPATH", LEGACY_PREFIX + "S3_BASEPATH", PROPERTY_PREFIX + "s3.base-path"), "s3.basePath");
+    public static final ParameterDefinition S3_REGION = new ParameterDefinition(
+            List.of(ENV_PREFIX + "S3_REGION", LEGACY_PREFIX + "S3_REGION", PROPERTY_PREFIX + "s3.region"), "s3.region");
+    public static final ParameterDefinition AZURE_CONTAINERNAME = new ParameterDefinition(
+            List.of(ENV_PREFIX + "AZURE_CONTAINERNAME", LEGACY_PREFIX + "AZURE_CONTAINERNAME", PROPERTY_PREFIX + "azure.container-name"), "azure.containerName");
+    public static final ParameterDefinition AZURE_BASEPATH = new ParameterDefinition(
+            List.of(ENV_PREFIX + "AZURE_BASEPATH", LEGACY_PREFIX + "AZURE_BASEPATH", PROPERTY_PREFIX + "azure.base-path"), "azure.basePath");
+    /**
+     * The secondary storage of the cluster: elasticsearch, opensearch, rdbms... In the actuator camunda.data.secondary-storage.type,
+     * in the YAML of Blueberry secondaryStorage
+     */
+    public static final ParameterDefinition SECONDARY_STORAGE = new ParameterDefinition(
+            List.of("camunda.data.secondary-storage.type", "camunda.data.secondaryStorage.type", "CAMUNDA_DATA_SECONDARYSTORAGE_TYPE"), "secondaryStorage");
+    /**
+     * The JDBC url of the secondary storage when its type is rdbms: it gives the vendor
+     */
+    public static final ParameterDefinition SECONDARY_STORAGE_RDBMS_URL = new ParameterDefinition(
+            List.of("camunda.data.secondary-storage.rdbms.url", "camunda.data.secondaryStorage.rdbms.url", "CAMUNDA_DATA_SECONDARYSTORAGE_RDBMS_URL"), "secondaryStorageRdbmsUrl");
+    /**
+     * The Elasticsearch snapshot repository of the history backup (POST /v2/backups/history). The cluster has no default value:
+     * without it the history backup is refused (403 "No backup repository configured")
+     */
+    public static final ParameterDefinition BACKUP_REPOSITORY_NAME = new ParameterDefinition(
+            List.of("camunda.data.secondary-storage.elasticsearch.backup.repository-name", "CAMUNDA_DATA_SECONDARYSTORAGE_ELASTICSEARCH_BACKUP_REPOSITORYNAME",
+                    "camunda.data.secondary-storage.opensearch.backup.repository-name", "CAMUNDA_DATA_SECONDARYSTORAGE_OPENSEARCH_BACKUP_REPOSITORYNAME"), "backupRepositoryName");
+    // The backup schedule of the primary storage
+    public static final ParameterDefinition BACKUP_CONTINUOUS = new ParameterDefinition(
+            List.of(ENV_PREFIX + "CONTINUOUS", PROPERTY_PREFIX + "continuous"), "backupContinuous");
+    public static final ParameterDefinition BACKUP_SCHEDULE = new ParameterDefinition(
+            List.of(ENV_PREFIX + "SCHEDULE", PROPERTY_PREFIX + "schedule"), "backupSchedule");
+    public static final ParameterDefinition BACKUP_CHECKPOINT_INTERVAL = new ParameterDefinition(
+            List.of(ENV_PREFIX + "CHECKPOINTINTERVAL", PROPERTY_PREFIX + "checkpoint-interval"), "backupCheckpointInterval");
+    public static final ParameterDefinition BACKUP_RETENTION_WINDOW = new ParameterDefinition(
+            List.of(ENV_PREFIX + "RETENTION_WINDOW", PROPERTY_PREFIX + "retention.window"), "backupRetentionWindow");
+
+    /**
+     * All the parameters collected from the cluster
+     */
+    public static final List<ParameterDefinition> PARAMETERS = List.of(CONTAINER_CONTAINERTYPE, FILESYSTEM_BASEPATH, FILESYSTEM_PATH,
+            GCS_BUCKETNAME, GCS_BASEPATH, S3_BUCKETNAME, S3_BASEPATH, S3_REGION, AZURE_CONTAINERNAME, AZURE_BASEPATH,
+            SECONDARY_STORAGE, SECONDARY_STORAGE_RDBMS_URL, BACKUP_REPOSITORY_NAME,
+            BACKUP_CONTINUOUS, BACKUP_SCHEDULE, BACKUP_CHECKPOINT_INTERVAL, BACKUP_RETENTION_WINDOW);
+
+    public static final List<String> PARAMETERS_KEYS = List.of(CONTAINER_CONTAINERTYPE.name(), "backupStore", "container.azure.connectionString");
+
+    /**
+     * For each parameter (the name), the names searched in /actuator/env: the first one found wins
      */
     public static final Map<String, List<String>> ENVIRONMENT;
 
     static {
         Map<String, List<String>> environment = new LinkedHashMap<>();
-        environment.put(CONTAINER_CONTAINERTYPE, List.of(ENV_PREFIX + "STORE", LEGACY_PREFIX + "STORE", PROPERTY_PREFIX + "store"));
-        environment.put(FILESYSTEM_BASEPATH, List.of(ENV_PREFIX + "FILESYSTEM_BASEPATH", LEGACY_PREFIX + "FILESYSTEM_BASEPATH", PROPERTY_PREFIX + "filesystem.base-path"));
-        // Not a variable of Zeebe: no name to search, the value comes from the configuration
-        environment.put(FILESYSTEM_PATH, List.of());
-        environment.put(GCS_BUCKETNAME, List.of(ENV_PREFIX + "GCS_BUCKETNAME", LEGACY_PREFIX + "GCS_BUCKETNAME", PROPERTY_PREFIX + "gcs.bucket-name"));
-        environment.put(GCS_BASEPATH, List.of(ENV_PREFIX + "GCS_BASEPATH", LEGACY_PREFIX + "GCS_BASEPATH", PROPERTY_PREFIX + "gcs.base-path"));
-        environment.put(S3_BUCKETNAME, List.of(ENV_PREFIX + "S3_BUCKETNAME", LEGACY_PREFIX + "S3_BUCKETNAME", PROPERTY_PREFIX + "s3.bucket-name"));
-        environment.put(S3_BASEPATH, List.of(ENV_PREFIX + "S3_BASEPATH", LEGACY_PREFIX + "S3_BASEPATH", PROPERTY_PREFIX + "s3.base-path"));
-        environment.put(S3_REGION, List.of(ENV_PREFIX + "S3_REGION", LEGACY_PREFIX + "S3_REGION", PROPERTY_PREFIX + "s3.region"));
-        environment.put(AZURE_CONTAINERNAME, List.of(ENV_PREFIX + "AZURE_CONTAINERNAME", LEGACY_PREFIX + "AZURE_CONTAINERNAME", PROPERTY_PREFIX + "azure.container-name"));
-        environment.put(AZURE_BASEPATH, List.of(ENV_PREFIX + "AZURE_BASEPATH", LEGACY_PREFIX + "AZURE_BASEPATH", PROPERTY_PREFIX + "azure.base-path"));
-        // The secondary storage
-        environment.put(SECONDARY_STORAGE, List.of("camunda.data.secondary-storage.type", "camunda.data.secondaryStorage.type", "CAMUNDA_DATA_SECONDARYSTORAGE_TYPE"));
-        // The backup schedule of the primary storage
-        environment.put(BACKUP_CONTINUOUS, List.of(ENV_PREFIX + "CONTINUOUS", PROPERTY_PREFIX + "continuous"));
-        environment.put(BACKUP_SCHEDULE, List.of(ENV_PREFIX + "SCHEDULE", PROPERTY_PREFIX + "schedule"));
-        environment.put(BACKUP_CHECKPOINT_INTERVAL, List.of(ENV_PREFIX + "CHECKPOINTINTERVAL", PROPERTY_PREFIX + "checkpoint-interval"));
-        environment.put(BACKUP_RETENTION_WINDOW, List.of(ENV_PREFIX + "RETENTION_WINDOW", PROPERTY_PREFIX + "retention.window"));
+        for (ParameterDefinition definition : PARAMETERS) {
+            environment.put(definition.name(), definition.actuatorNames());
+        }
         ENVIRONMENT = Collections.unmodifiableMap(environment);
     }
 
@@ -140,6 +200,13 @@ public class OrchestrationParameter {
 
         public Origin getOrigin() {
             return origin;
+        }
+
+        /**
+         * @return the origin in lower case ("actuator", "config"), to display it
+         */
+        public String getOriginLabel() {
+            return origin.name().toLowerCase(java.util.Locale.ROOT);
         }
     }
     private static final List<String> actuatorKeys = List.of("contexts",
@@ -189,21 +256,39 @@ public class OrchestrationParameter {
     public void refresh() {
         AccessActuator.Result environment = accessActuator.readEnvironment(ENVIRONMENT);
         Map<String, Parameter> collected = new LinkedHashMap<>();
-        for (String name : ENVIRONMENT.keySet()) {
+        for (ParameterDefinition definition : PARAMETERS) {
+            String name = definition.name();
             String fromActuator = environment.values().get(name);
+            String fromConfig = getConfiguredValue(definition);
             if (fromActuator != null) {
                 collected.put(name, new Parameter(name, fromActuator, Parameter.Origin.ACTUATOR));
             } else {
-                String fromConfig = springEnvironment.getProperty(CONFIG_PREFIX + name);
-                collected.put(name, new Parameter(name,
-                        fromConfig == null || fromConfig.isBlank() ? null : fromConfig.trim(),
-                        Parameter.Origin.CONFIG));
+                collected.put(name, new Parameter(name, fromConfig.isEmpty() ? null : fromConfig, Parameter.Origin.CONFIG));
             }
         }
         this.lastEnvironment = environment;
         this.parameterMap = collected;
         logger.info("Orchestration parameters collected: actuator reachable={}, {} of {} read in the actuator",
                 environment.reachable(), environment.values().size(), collected.size());
+    }
+
+    /**
+     * @return the parameter (value and origin), null if the name is unknown
+     */
+    public Parameter getParameter(String parameterName) {
+        return parameterMap.get(parameterName);
+    }
+
+    public Parameter getParameter(ParameterDefinition definition) {
+        return parameterMap.get(definition.name());
+    }
+
+    public Object getParameterValue(ParameterDefinition definition) {
+        return getParameterValue(definition.name());
+    }
+
+    public String getParameterString(ParameterDefinition definition) {
+        return getParameterString(definition.name());
     }
 
     /**
@@ -223,18 +308,48 @@ public class OrchestrationParameter {
     }
 
     /**
-     * @return the value in the configuration (blueberry.orchestrationConfig), whatever the actuator says. Empty if there is none
+     * @return the value in the configuration (blueberry.orchestrationConfig), whatever the actuator says. Empty if there is none.
+     * Private: the applications use getParameter() or getParameterValue()
      */
-    public String getConfiguredValue(String parameterName) {
-        String value = springEnvironment.getProperty(CONFIG_PREFIX + parameterName);
+    private String getConfiguredValue(ParameterDefinition definition) {
+        String value = springEnvironment.getProperty(CONFIG_PREFIX + definition.blueberryConfig());
         return value == null ? "" : value.trim();
     }
 
+    public static final String BACKUP_MODE_CONTINUOUS = "CONTINUOUS";
+    public static final String BACKUP_MODE_MANUAL = "MANUAL";
+
     /**
-     * @return why the last read of /actuator/env gave nothing (not exposed, hidden...). Empty if it worked
+     * The backup mode of the cluster, from the parameter backupContinuous
+     *
+     * @return CONTINUOUS or MANUAL, empty if the cluster does not say
      */
-    public String getEnvironmentNote() {
-        return lastEnvironment.note();
+    public String getBackupMode() {
+        String continuous = getParameterString(BACKUP_CONTINUOUS);
+        return continuous.isEmpty() ? "" : Boolean.parseBoolean(continuous) ? BACKUP_MODE_CONTINUOUS : BACKUP_MODE_MANUAL;
+    }
+
+    /**
+     * The secondary storage implemented by Blueberry: the value of the parameter secondaryStorage (elasticsearch, opensearch...).
+     * When the value is "rdbms" (a type of storage, not a database), the vendor is read in the JDBC url of the cluster
+     * (jdbc:postgresql: gives postgres, jdbc:sqlserver: gives sqlserver...).
+     *
+     * @return the name, empty if it is unknown (rdbms without a readable JDBC url)
+     */
+    public String getSecondaryStorageKind() {
+        String type = getParameterString(SECONDARY_STORAGE);
+        if (!"rdbms".equalsIgnoreCase(type)) {
+            return type;
+        }
+        String url = getParameterString(SECONDARY_STORAGE_RDBMS_URL).toLowerCase(java.util.Locale.ROOT);
+        if (url.startsWith("jdbc:postgresql:")) {
+            return "postgres";
+        }
+        if (url.startsWith("jdbc:sqlserver:")) {
+            return "sqlserver";
+        }
+        // mysql, mariadb, oracle, h2...: the vendor of the url, without an implementation in Blueberry
+        return url.startsWith("jdbc:") ? url.substring(5, url.indexOf(':', 5) > 0 ? url.indexOf(':', 5) : url.length()) : "";
     }
 
     /**
@@ -370,7 +485,7 @@ public class OrchestrationParameter {
 
         // 1. The environment of Zeebe: the variables CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_* (/actuator/env)
         Map<String, String> fromActuator = valuesOf(Parameter.Origin.ACTUATOR);
-        if (fromActuator.containsKey(CONTAINER_CONTAINERTYPE)) {
+        if (fromActuator.containsKey(CONTAINER_CONTAINERTYPE.name())) {
             ResultParameter fromEnvironment = new ResultParameter();
             fromEnvironment.accessActuator = true;
             fromEnvironment.envReachable = true;
@@ -414,8 +529,8 @@ public class OrchestrationParameter {
      */
     static ResultParameter fullFillFromEnvironment(ResultParameter resultParameter,
                                                                         Map<String, String> values) {
-        String store = values.get(CONTAINER_CONTAINERTYPE);
-        resultParameter.parameters.put(CONTAINER_CONTAINERTYPE, store);
+        String store = values.get(CONTAINER_CONTAINERTYPE.name());
+        resultParameter.parameters.put(CONTAINER_CONTAINERTYPE.name(), store);
         if (STORE_FILESYSTEM.equalsIgnoreCase(store)) {
             putIfPresent(resultParameter, CONTAINER_BASEPATH, values.get("filesystem.basePath"));
         }
@@ -461,7 +576,7 @@ public class OrchestrationParameter {
         }
         Map<String, Object> propertiesMap = (Map<String, Object>) properties;
         Object store = propertiesMap.get("store");
-        resultParameter.parameters.put(CONTAINER_CONTAINERTYPE, store);
+        resultParameter.parameters.put(CONTAINER_CONTAINERTYPE.name(), store);
 
         if (STORE_GCS.equalsIgnoreCase(String.valueOf(store))) {
             Map<String, Object> gcsProperties = (Map<String, Object>) propertiesMap.get("gcs");
@@ -484,7 +599,7 @@ public class OrchestrationParameter {
     private ResultParameter fullFillFromConfiguration(ResultParameter resultParameter) {
         // the parameters collected: the actuator, then blueberry.orchestrationConfig
         Map<String, String> values = valuesOf(null);
-        values.putIfAbsent(CONTAINER_CONTAINERTYPE, "");
+        values.putIfAbsent(CONTAINER_CONTAINERTYPE.name(), "");
         return fullFillFromEnvironment(resultParameter, values);
     }
 }

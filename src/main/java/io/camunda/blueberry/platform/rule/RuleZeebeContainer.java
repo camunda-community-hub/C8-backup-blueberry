@@ -66,11 +66,12 @@ public class RuleZeebeContainer implements Rule {
             if (resultParameter.info != null && !resultParameter.info.isBlank()) {
                 ruleInfo.addDetails(resultParameter.info);
             }
-            ruleInfo.addVerificationsAssertBoolean("Container type defined: [" + resultParameter.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE) + "]",
-                    resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
+            String origin = resultParameter.accessActuator ? "actuator" : "config";
+            ruleInfo.addVerificationsAssertBoolean("Container type defined: [" + resultParameter.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()) + "] (" + origin + ")",
+                    resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()),
                     null);
 
-            if (!resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE)) {
+            if (!resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name())) {
                 ruleInfo.addError("Value for parameter [" + OrchestrationParameter.CONTAINER_CONTAINERTYPE + "] is required. Zeebe: "
                         + "CAMUNDA_DATA_PRIMARYSTORAGE_BACKUP_STORE, readable by Blueberry in /actuator/env of Zeebe (see the details)");
                 ruleInfo.setStatus(RuleStatus.FAILED);
@@ -78,15 +79,15 @@ public class RuleZeebeContainer implements Rule {
 
             // According to the type of storage, different check
             List<String> additionalParametersToCheck = null;
-            String containerTypeValue = String.valueOf(resultParameter.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE));
+            String containerTypeValue = String.valueOf(resultParameter.parameters.get(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()));
 
             // Elasticsearch and Zeebe use the same container: the type used to create the repository (the parameter
             // container.containerType: the actuator, else blueberry.orchestrationConfig) must be the one of Zeebe
             String blueberryType = orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE);
-            if (resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE) && !blueberryType.isBlank()) {
+            if (resultParameter.parameters.containsKey(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()) && !blueberryType.isBlank()) {
                 boolean sameType = blueberryType.equalsIgnoreCase(containerTypeValue);
-                ruleInfo.addVerificationsAssertBoolean("Container type of Zeebe [" + containerTypeValue
-                                + "] is the container type used by Blueberry for Elasticsearch [" + blueberryType + "]",
+                ruleInfo.addVerificationsAssertBoolean("Container type of Zeebe [" + containerTypeValue + "] (" + origin
+                                + ") is the container type used by Blueberry for Elasticsearch [" + blueberryType + "] (" + originOf(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name()) + ")",
                         sameType, null);
                 if (!sameType) {
                     ruleInfo.addError("Zeebe backs up in [" + containerTypeValue + "] but Blueberry uses ["
@@ -100,7 +101,7 @@ public class RuleZeebeContainer implements Rule {
                 additionalParametersToCheck = List.of(OrchestrationParameter.CONTAINER_BASEPATH);
                 String elasticsearchPath = orchestrationParameter.getParameterString(OrchestrationParameter.FILESYSTEM_PATH);
                 ruleInfo.addVerificationsAssertBoolean("Directory of the Elasticsearch repository (blueberry.orchestrationConfig.filesystem.path): ["
-                                + elasticsearchPath + "]",
+                                + elasticsearchPath + "] (" + originOf(OrchestrationParameter.FILESYSTEM_PATH.name()) + ")",
                         !elasticsearchPath.isEmpty(), null);
                 if (elasticsearchPath.isEmpty()) {
                     ruleInfo.addError("blueberry.orchestrationConfig.filesystem.path is required: the directory of the Elasticsearch repository "
@@ -123,7 +124,7 @@ public class RuleZeebeContainer implements Rule {
                 for (String parameterKey : additionalParametersToCheck) {
                     ruleInfo.addVerificationsAssertBoolean("Parameter [" + parameterKey + "]"
                                     + (resultParameter.parameters.containsKey(parameterKey)
-                                    ? ": [" + resultParameter.parameters.get(parameterKey) + "]" : ""),
+                                    ? ": [" + resultParameter.parameters.get(parameterKey) + "] (" + origin + ")" : ""),
                             resultParameter.parameters.containsKey(parameterKey),
                             null);
 
@@ -145,4 +146,11 @@ public class RuleZeebeContainer implements Rule {
     }
 
 
+    /**
+     * @return where the value of the parameter comes from: actuator or config
+     */
+    private String originOf(String parameterName) {
+        OrchestrationParameter.Parameter parameter = orchestrationParameter.getParameter(parameterName);
+        return parameter == null ? "config" : parameter.getOriginLabel();
+    }
 }

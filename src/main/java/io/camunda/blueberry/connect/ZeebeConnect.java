@@ -3,7 +3,7 @@ package io.camunda.blueberry.connect;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.secondary.SecondaryStorageDetector;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.connect.toolbox.WebActuator;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
@@ -39,7 +39,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     private final RestTemplate restTemplate;
     private final WebActuator webActuator;
     private final ZeebeRestApi zeebeRestApi;
-    private final SecondaryStorageDetector secondaryStorageDetector;
+    private final OrchestrationParameter orchestrationParameter;
     Logger logger = LoggerFactory.getLogger(ZeebeConnect.class);
     private long lastTentativeConnection = 0;
 
@@ -47,11 +47,11 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
      * The CamundaClient is created by the Spring Boot SDK starter (camunda.client.* properties)
      */
     public ZeebeConnect(BlueberryConfig blueberryConfig, RestTemplate restTemplate, ObjectMapper objectMapper, CamundaClient camundaClient,
-                        ZeebeRestApi zeebeRestApi, SecondaryStorageDetector secondaryStorageDetector) {
+                        ZeebeRestApi zeebeRestApi, OrchestrationParameter orchestrationParameter) {
         super(restTemplate);
         webActuator = new WebActuator(restTemplate);
         this.zeebeRestApi = zeebeRestApi;
-        this.secondaryStorageDetector = secondaryStorageDetector;
+        this.orchestrationParameter = orchestrationParameter;
         this.blueberryConfig = blueberryConfig;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
@@ -153,10 +153,10 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             clusterInformation.partitionsCount = topology.getPartitionsCount();
             clusterInformation.replicationFactor = topology.getReplicationFactor();
             clusterInformation.camundaVersion = topology.getGatewayVersion();
-            // detected on the cluster, else the value of the configuration (blueberry.secondaryStorage)
-            SecondaryStorageDetector.Detection detection = secondaryStorageDetector.detect();
-            clusterInformation.secondaryStorage = detection.value();
-            clusterInformation.secondaryStorageSource = detection.source();
+            // the parameter secondaryStorage: the actuator of Zeebe, else the configuration
+            OrchestrationParameter.Parameter secondaryStorage = orchestrationParameter.getParameter(OrchestrationParameter.SECONDARY_STORAGE);
+            clusterInformation.secondaryStorage = orchestrationParameter.getParameterString(OrchestrationParameter.SECONDARY_STORAGE);
+            clusterInformation.secondaryStorageSource = secondaryStorage == null ? "" : secondaryStorage.getOriginLabel();
 
             return clusterInformation;
         } catch (Exception e) {
@@ -220,7 +220,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
                     "POST " + zeebeRestApi.getBaseUrl() + "/exporting/pause?soft=true answered " + result.status() + " " + result.raw(),
                     backupId);
         }
-        operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBE, "Soft pause of the Zeebe exporting");
+        operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBE, "Zeebe exporting paused with success");
     }
 
     /**

@@ -28,11 +28,11 @@ public class OperationLog {
      * @param totalNumberOfSteps total number of step expected
      */
     public void startOperation(String operationName, int totalNumberOfSteps) {
-        info(component, "Start operation [" + operationName + "] with " + totalNumberOfSteps + " steps");
         this.operationName = operationName;
         this.totalNumberOfSteps = totalNumberOfSteps;
         this.currentStep = 0;
         this.operationBeginTime = System.currentTimeMillis();
+        info(component, "Start operation [" + operationName + "] with " + totalNumberOfSteps + " steps");
     }
 
     /**
@@ -43,52 +43,55 @@ public class OperationLog {
     public void operationStep(CamundaApplicationInt.COMPONENT component, String stepName) {
         this.currentStep++;
         this.stepName = stepName;
-        info(null, "Operation[" + operationName + "/" + stepName + "] : " + currentStep + "/" + totalNumberOfSteps);
+        info(null, "Operation[" + operationName + "], Step Started");
     }
 
     public void operationStep(CamundaApplicationInt.COMPONENT component, int forceStep, String stepName) {
         this.component = component;
         this.currentStep = forceStep;
         this.stepName = stepName;
-        info(component, "Operation[" + operationName + "/" + stepName + "] : " + currentStep + "/" + totalNumberOfSteps);
+        info(component, "Operation[" + operationName + "], Step Started");
     }
 
     public void endOperation() {
-        info(null, "Operation[" + operationName + "] : finished in " + (System.currentTimeMillis() - operationBeginTime) + " ms");
+        info(null, "Operation[" + operationName + "] : Step finished in " + (System.currentTimeMillis() - operationBeginTime) + " ms");
     }
 
     public void info(CamundaApplicationInt.COMPONENT component, String message) {
         if (component==null) {
-            logger.info( message);
+            logger.info( getBanner()+message);
         } else {
-            logger.info("Component:{} : {}", component, message);
+            logger.info("{} Component:{} : {}", getBanner(), component, message);
         }
         Message msg = new Message();
         msg.type = Type.INFO;
-        msg.message = message;
+        msg.content.add( message);
         msg.component = component;
         msg.date = new Date();
-        listMessages.add(msg);
+        msg.step = currentStep;
+        addInMessage(msg);
     }
 
     public void warning(CamundaApplicationInt.COMPONENT component, String message) {
-        logger.error(message);
+        logger.error(getBanner()+ message);
         Message msg = new Message();
         msg.type = Type.WARNING;
-        msg.message = message;
+        msg.content.add( message);
         msg.component = component;
         msg.date = new Date();
-        listMessages.add(msg);
+        msg.step = currentStep;
+        addInMessage(msg);
     }
 
     public void error(CamundaApplicationInt.COMPONENT component, String message) {
-        logger.error(message);
+        logger.error(getBanner() + message);
         Message msg = new Message();
         msg.type = Type.ERROR;
-        msg.message = message;
+        msg.content.add(message);
         msg.component = component;
         msg.date = new Date();
-        listMessages.add(msg);
+        msg.step = currentStep;
+        addInMessage(msg);
     }
 
     public List<Message> getMessages() {
@@ -128,8 +131,41 @@ public class OperationLog {
 
     public static class Message {
         public Type type;
-        public String message;
+        public List<String> content = new ArrayList<>();
         public CamundaApplicationInt.COMPONENT component;
         public Date date;
+        public int step;
+    }
+
+    public void addInMessage( Message message) {
+        if (listMessages.isEmpty()) {
+            listMessages.add(message);
+            return;
+        }
+        Message previous = listMessages.getLast();
+        if (previous.step != message.step
+        || previous.component != message.component) {
+            listMessages.add(message);
+            return;
+        }
+        previous.content.add( message.content.get(0));
+        // update the previous.type: keep the high level. The enum is ordered by severity: INFO < WARNING < ERROR
+        previous.type = highestType(previous.type, message.type);
+    }
+
+    /**
+     * @return the more severe of the two types: max(ERROR, WARNING) is ERROR, max(WARNING, INFO) is WARNING. A null type is ignored
+     */
+    static Type highestType(Type first, Type second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null) {
+            return first;
+        }
+        return second.ordinal() > first.ordinal() ? second : first;
+    }
+    private String getBanner()
+    { return currentStep+"/"+totalNumberOfSteps + "("+stepName+") :";
     }
 }

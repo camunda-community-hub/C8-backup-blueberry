@@ -125,7 +125,7 @@ public class DashboardRestController {
             Rule.RuleStatus ruleStatus = explorationCluster.rulesOk();
             status.configuration.statusConfiguration = ruleStatus == null ? "" : ruleStatus.toString();
             status.configuration.elasticsearch = blueberryConfig.isElasticsearchEnabled() ? "enabled" : "disabled";
-            status.configuration.optimize = blueberryConfig.isOptimizeEnabled() ? "enabled" : "disabled";
+            status.configuration.optimize = optimizeConnect.isActive() ? "enabled" : "disabled";
 
             return status;
 

@@ -17,7 +17,7 @@ import {Button, InlineNotification, Tag, TextInput, Dropdown} from "carbon-compo
 import {ArrowRepeat, DatabaseUp, Gear} from "react-bootstrap-icons";
 import {Card} from "react-bootstrap";
 
-const items = [{ id: "EXPLICIT", text: "Explicit" }, { id: "NEXTID", text: "Next id" }, { id: "TIMEBACKUP", text: "Time backup (yyyymmddHHMM" },];
+const items = [{ id: "EXPLICIT", text: "Explicit" }, { id: "NEXTID", text: "Next id" }, { id: "TIMEBACKUP", text: "Time backup (yyyyMMddHHmm, UTC)" },];
 
 class Backup extends React.Component {
 
@@ -114,7 +114,7 @@ class Backup extends React.Component {
                                     className="m-3"
                                     id="explicitId"
                                     labelText="Explicit ID (number only)"
-                                    disabled={this.state.parameter.backupPolicy !== 'NEXTID'}
+                                    disabled={this.state.parameter.backupPolicy !== 'EXPLICIT'}
                                     value={this.state.parameter.backupId}
                                     type="number"
                                     onChange={(event) => {
@@ -129,7 +129,7 @@ class Backup extends React.Component {
                                         onClick={() => {
                                             this.startBackup()
                                         }}
-                                        disabled={this.state.display.loading}>
+                                        disabled={this.state.display.loading || (this.state.parameter.backupPolicy === "EXPLICIT" && this.state.parameter.backupId === "")}>
                                     Start a backup
                                 </Button>
                             </Card.Body>
@@ -243,11 +243,11 @@ class Backup extends React.Component {
                         </tr>
                         <tr>
                             <td>Scheduler</td>
-                            <td>{config.schedule ? <strong>{config.schedule}</strong> : "—"} {origin(config.scheduleOrigin)}</td>
+                            <td>{config.schedule ? <strong>{config.schedule}</strong> : ""} {origin(config.scheduleOrigin)}</td>
                         </tr>
                         <tr>
                             <td>Backup retention period</td>
-                            <td>{config.retentionWindow ? <strong>{config.retentionWindow}</strong> : "—"} {origin(config.retentionWindowOrigin)}</td>
+                            <td>{config.retentionWindow ? <strong>{config.retentionWindow}</strong> : ""} {origin(config.retentionWindowOrigin)}</td>
                         </tr>
                         </tbody>
                     </table>
@@ -272,8 +272,13 @@ class Backup extends React.Component {
         const cb = this.state.currentBackup;
         return (
             <Card>
-                <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}}>
-                    Current backup
+                <Card.Header className="d-flex justify-content-between align-items-center"
+                             style={{backgroundColor: "rgba(0,0,0,.03)", height: "50px"}}>
+                    <span>Current backup</span>
+                    <Button className="btn btn-sm btn-outline-secondary" title="Refresh" aria-label="Refresh"
+                            onClick={() => this.monitorBackup()}>
+                        <ArrowRepeat/>
+                    </Button>
                 </Card.Header>
                 <Card.Body>
                     <table style={{borderCollapse: "separate", borderSpacing: "10px"}}>
@@ -414,7 +419,8 @@ class Backup extends React.Component {
     startBackup() {
         let uri = '/blueberry/api/backup/start?';
         console.log("backup.startBackup http[" + uri + "]");
-        var parameterBackup = {"nextId": !this.state.parameter.explicit, "backupId": this.state.parameter.backupId}
+        const explicitId = this.state.parameter.backupPolicy === "EXPLICIT" && this.state.parameter.backupId !== "" ? Number(this.state.parameter.backupId) : null;
+        var parameterBackup = {"backupPolicy": this.state.parameter.backupPolicy, "backupId": explicitId}
         this.setDisplayProperty("loading", true);
         this.setState({status: ""});
         var restCallService = RestCallService.getInstance();

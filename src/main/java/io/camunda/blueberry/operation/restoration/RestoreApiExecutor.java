@@ -53,7 +53,7 @@ public class RestoreApiExecutor {
     public RestoreApiExecutor(ZeebeRestApi rest, SecondaryStorageFactory secondaryStorageFactory,
                               BlueberryConfig blueberryConfig, OptimizeConnect optimizeConnect) {
         this(rest, secondaryStorageFactory,
-                () -> blueberryConfig.isOptimizeEnabled() && optimizeConnect.isConnected(),
+                optimizeConnect::isReachable,
                 2000, blueberryConfig.getRestoreZeebeTimeoutSeconds());
     }
 

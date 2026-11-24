@@ -79,7 +79,7 @@ public class WebActuator {
                 operationLog.info(component, "backup [" + backupId + "] url[" + url + "] ListBackup[" + backupOperation.listSnapshots + "]");
             } else if (bodyJson.has("message")) { // Handle Optimize case where "message" exists
                 backupOperation.message = bodyJson.get("message").asText();
-                operationLog.info(component, String.format("backup [%d] url[%s] Message[%s]", backupId, url, backupOperation.message));
+                operationLog.info(component, String.format("backup started [%d] url[%s] Message[%s]", backupId, url, backupOperation.message));
             } else {
                 operationLog.warning(component, String.format("backup [%d] url[%s] Unexpected response: %s", backupId, url, bodyJson));
             }

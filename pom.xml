@@ -150,6 +150,25 @@
 
     <build>
 
+        <resources>
+            <!-- Only the banner is filtered: @project.version@ is replaced by the version of the pom at build time.
+                 The other resources are copied as they are (application.yaml has ${...} placeholders for Spring). -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>banner.txt</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>banner.txt</exclude>
+                </excludes>
+            </resource>
+        </resources>
+
         <plugins>
             <!-- connect the React application in the Springboot application -->
             <plugin>
@@ -200,6 +219,13 @@
             </plugin>
             <plugin>
                 <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <!-- Only @...@ is a placeholder of the filtered resources (the banner): ${...} stays for Spring -->
+                    <useDefaultDelimiters>false</useDefaultDelimiters>
+                    <delimiters>
+                        <delimiter>@</delimiter>
+                    </delimiters>
+                </configuration>
                 <executions>
                     <execution>
                         <id>copy-resources</id>

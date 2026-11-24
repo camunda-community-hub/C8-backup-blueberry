@@ -3,7 +3,7 @@ package io.camunda.blueberry.operation.restoration;
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.OptimizeConnect;
 import io.camunda.blueberry.connect.ZeebeRestApi;
-import io.camunda.blueberry.connect.secondary.SecondaryStorageDetector;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +31,7 @@ public class RestoreEnvironmentCheck {
     public RestoreEnvironmentCheck(BlueberryConfig blueberryConfig, ZeebeRestApi zeebeRestApi,
                                    SecondaryStorageFactory secondaryStorageFactory, OptimizeConnect optimizeConnect) {
         this(blueberryConfig, zeebeRestApi, secondaryStorageFactory,
-                () -> blueberryConfig.isOptimizeEnabled() && optimizeConnect.isConnected());
+                optimizeConnect::isReachable);
     }
 
     RestoreEnvironmentCheck(BlueberryConfig blueberryConfig, ZeebeRestApi zeebeRestApi,
@@ -55,12 +55,13 @@ public class RestoreEnvironmentCheck {
         }
 
         // The secondary storage, and what Blueberry can do with it
-        SecondaryStorageDetector.Detection detection = secondaryStorageFactory.detect();
+        OrchestrationParameter.Parameter secondaryStorageParameter = secondaryStorageFactory.getValue();
+        String secondaryStorageValue = secondaryStorageFactory.getValueString();
         SecondaryStorageInt secondaryStorage = secondaryStorageFactory.getSecondaryStorage();
         if (secondaryStorage == null) {
-            blockers.add(detection.value().isEmpty()
+            blockers.add(secondaryStorageValue.isEmpty()
                     ? "The secondary storage is unknown: set blueberry.secondaryStorage (" + String.join(", ", secondaryStorageFactory.getSupportedNames()) + ")."
-                    : "Blueberry has no implementation for the secondary storage [" + detection.value() + "]. Supported: "
+                    : "Blueberry has no implementation for the secondary storage [" + secondaryStorageValue + "]. Supported: "
                     + String.join(", ", secondaryStorageFactory.getSupportedNames()));
         } else if (!secondaryStorage.supportsRestore()) {
             blockers.add("Blueberry can't restore the secondary storage [" + secondaryStorage.getName() + "].");
@@ -76,8 +77,8 @@ public class RestoreEnvironmentCheck {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("restoreApiConnected", restApi);
         result.put("restoreApiUrl", zeebeRestApi.getBaseUrl());
-        result.put("secondaryStorage", detection.value());
-        result.put("secondaryStorageSource", detection.source());
+        result.put("secondaryStorage", secondaryStorageValue);
+        result.put("secondaryStorageSource", secondaryStorageParameter.getOriginLabel());
         result.put("optimizeRunning", optimize);
         result.put("executionEnabled", blueberryConfig.isRestoreExecutionEnabled());
         result.put("ready", blockers.isEmpty() && blueberryConfig.isRestoreExecutionEnabled());

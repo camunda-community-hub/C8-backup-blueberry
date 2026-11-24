@@ -1,5 +1,6 @@
 package io.camunda.blueberry.connect.secondary;
 
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.connect.BackupInfo;
 import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.exception.BackupException;
@@ -62,7 +63,7 @@ public class SqlServerConnect implements SecondaryStorageInt {
     private static final Pattern SAFE_DATABASE_NAME = Pattern.compile("[A-Za-z0-9_\\-]+");
 
     private final Logger logger = LoggerFactory.getLogger(SqlServerConnect.class);
-    private final SecondaryStorageDetector secondaryStorageDetector;
+    private final OrchestrationParameter orchestrationParameter;
     private final Map<Long, CompletableFuture<Void>> runningBackups = new ConcurrentHashMap<>();
 
     @Value("${blueberry.sqlserver.url:}")
@@ -76,8 +77,8 @@ public class SqlServerConnect implements SecondaryStorageInt {
     @Value("${blueberry.sqlserver.backupPath:}")
     private String backupPath;
 
-    public SqlServerConnect(SecondaryStorageDetector secondaryStorageDetector) {
-        this.secondaryStorageDetector = secondaryStorageDetector;
+    public SqlServerConnect(OrchestrationParameter orchestrationParameter) {
+        this.orchestrationParameter = orchestrationParameter;
     }
 
     @Override
@@ -90,7 +91,7 @@ public class SqlServerConnect implements SecondaryStorageInt {
      */
     @Override
     public boolean isActive() {
-        return SecondaryStorageFactory.normalize(secondaryStorageDetector.detect().value())
+        return SecondaryStorageFactory.normalize(orchestrationParameter.getSecondaryStorageKind())
                 .equals(SecondaryStorageFactory.normalize(NAME));
     }
 

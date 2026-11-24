@@ -80,10 +80,10 @@ public class RuleActuatorEndpoint implements Rule {
             String url = actuatorUrl.get() + "/actuator/" + endpoint.endpointId();
             String problem = endpoint.type() == CheckType.LINK ? checkLink(endpoint) : checkAccess(url);
             if (problem == null) {
-                ruleInfo.addVerifications("Access " + url, RuleStatus.CORRECT, url);
+                ruleInfo.addVerifications("Access [" + url + "] (config)", RuleStatus.CORRECT, url);
             } else {
                 notAccessible.add(endpoint.endpointId());
-                ruleInfo.addVerificationsWithError("Access " + url, RuleStatus.FAILED, url,
+                ruleInfo.addVerificationsWithError("Access [" + url + "] (config)", RuleStatus.FAILED, url,
                         problem + "\n" + getFixExplanation(endpoint.endpointId()),
                         getFixConfiguration(endpoint.endpointId()));
             }
