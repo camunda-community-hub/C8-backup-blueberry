@@ -1,10 +1,10 @@
 package io.camunda.blueberry.platform.rule;
 
-
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
-import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.OperationResult;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +26,9 @@ public class RuleZeebeRecordRepository implements Rule {
     @Autowired
     OrchestrationParameter orchestrationParameter;
 
+    @Autowired
+    io.camunda.blueberry.connect.secondary.ElasticsearchRepositories repositories;
+
     @Override
     public boolean validRule() {
         // is a repository is define in the cluster?
@@ -38,7 +41,7 @@ public class RuleZeebeRecordRepository implements Rule {
     }
 
     public String getExplanations() {
-        return "A repository must be defined in ElasticSearch to backup Zeebe Record data, and map it to a valid container.";
+        return "The Zeebe records are backed up directly by Elasticsearch: a repository must exist in Elasticsearch (mapped to a valid container), and its name comes from Blueberry. Blueberry then sends a request to Elasticsearch to snapshot the zeebe-record indices into that repository.";
     }
 
 
@@ -73,20 +76,23 @@ public class RuleZeebeRecordRepository implements Rule {
             //------------ Second step, verify if the repository exists in elasticSearch
             if (ruleInfo.inProgress()) {
                 // now check if the repository exists in Elastic search
-                OperationResult operationResult = elasticSearchConnect.existRepository(blueberryConfig.getZeebeRecordRepository());
+                OperationResult operationResult = elasticSearchConnect.existRepository(repositories.zeebeRecord().getValueString());
                 accessElasticsearchRepository = operationResult.resultBoolean;
-                ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository() + "] (config) :"
+                ruleInfo.addVerifications("Check Elasticsearch repository [" + repositories.zeebeRecord().getValueString() + "] parameter " + repositories.zeebeRecord().describe() + " :"
                                 + operationResult.details,
-                        accessElasticsearchRepository ? RuleStatus.CORRECT :execute? RuleStatus.FAILEDBUTWILLBEFIXED: RuleStatus.FAILED,
+                        accessElasticsearchRepository ? RuleStatus.CORRECT : execute ? RuleStatus.FAILEDBUTWILLBEFIXED : RuleStatus.FAILED,
                         operationResult.command);
 
                 // if the repository exists, then we stop the rule execution here
                 if (accessElasticsearchRepository) {
-                    ruleInfo.addDetails("Repository exist in Elastic search");
+                    ruleInfo.addDetails("ZeebeRecord is backed up directly by Elasticsearch. A repository must exist in Elasticsearch, and its name comes from Blueberry: ["
+                            + repositories.zeebeRecord().getValueString() + "] parameter " + repositories.zeebeRecord().describe()
+                            + ". Blueberry sends a request to Elasticsearch to snapshot the zeebe-record indices into that repository.");
                 } else {
                     // if we don't execute the rule, we stop here on a failure
                     if (!execute) {
-                        ruleInfo.addError("Repository does not exist in Elastic search, and must be created");
+                        ruleInfo.addError("ZeebeRecord is backed up directly by Elasticsearch, into the repository [" + repositories.zeebeRecord().getValueString()
+                                + "] parameter " + repositories.zeebeRecord().describe() + ". This repository does not exist in Elasticsearch and must be created: use Configure");
                         ruleInfo.setStatus(RuleStatus.FAILED);
                     }
                 }
@@ -95,7 +101,7 @@ public class RuleZeebeRecordRepository implements Rule {
 
             // Third step, create the repository if asked
             if (execute && ruleInfo.inProgress()) {
-                OperationResult operationResult = elasticSearchConnect.createRepository(blueberryConfig.getZeebeRecordRepository(),
+                OperationResult operationResult = elasticSearchConnect.createRepository(repositories.zeebeRecord().getValueString(),
                         orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
                         blueberryConfig.getZeebeRecordContainerBasePath());
                 if (operationResult.success) {
@@ -104,8 +110,8 @@ public class RuleZeebeRecordRepository implements Rule {
                     ruleInfo.addError("Error when creating the repository in ElasticSearch :" + operationResult.details);
                     ruleInfo.setStatus(RuleStatus.FAILED);
                 }
-                ruleInfo.addVerifications("Check Elasticsearch repository [" + blueberryConfig.getZeebeRecordRepository()
-                                + "] (config) ContainerType[" + orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE)
+                ruleInfo.addVerifications("Check Elasticsearch repository [" + repositories.zeebeRecord().getValueString()
+                                + "] parameter " + repositories.zeebeRecord().describe() + " ContainerType[" + orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE)
                                 + "] (" + originOf(OrchestrationParameter.CONTAINER_CONTAINERTYPE.name())
                                 + ") basePath[" + blueberryConfig.getZeebeRecordContainerBasePath() + "] (config)",
                         operationResult.success ? RuleStatus.CORRECT : RuleStatus.FAILED,
@@ -123,7 +129,8 @@ public class RuleZeebeRecordRepository implements Rule {
      * @return where the value of the parameter comes from: actuator or config
      */
     private String originOf(String parameterName) {
-        OrchestrationParameter.Parameter parameter = orchestrationParameter.getParameter(parameterName);
+        Parameter parameter = orchestrationParameter.getParameter(parameterName);
         return parameter == null ? "config" : parameter.getOriginLabel();
     }
 }
+

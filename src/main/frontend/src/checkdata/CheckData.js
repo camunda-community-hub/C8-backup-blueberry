@@ -146,19 +146,33 @@ class CheckData extends React.Component {
                                         <thead>
                                         <tr>
                                             <th>Partition</th>
-                                            <th>Zeebe position</th>
-                                            <th>Zeebe Record</th>
-                                            <th>Operate</th>
-                                            <th>Tasklist</th>
-                                            <th>Optimize</th>
+                                            <th>Role</th>
+                                            <th>Processed position</th>
+                                            <th>Exported position</th>
+                                            <th>Zeebe record: last position</th>
+                                            <th>Zeebe record: last sequence</th>
                                         </tr>
                                         </thead>
                                         <tbody>
-                                        {this.state.dashboard2?.synthesis?.map((entry, index) => (
-                                            <tr>
-                                                <td>{entry.partitionInfo.partitionId}</td>
-                                                <td>{entry.zeebeRecordSequence}</td>
-                                            </tr>
+                                        {this.partitions().map((entry) => (
+                                            <React.Fragment key={entry.partitionInfo?.partitionId}>
+                                                <tr>
+                                                    <td><b>{entry.partitionInfo?.partitionId}</b></td>
+                                                    <td>{entry.partitionInfo?.role}</td>
+                                                    <td>{entry.partitionInfo?.processedPosition}</td>
+                                                    <td>{entry.partitionInfo?.exportedPosition}</td>
+                                                    <td>{entry.zeebeRecordPosition}</td>
+                                                    <td>{entry.zeebeRecordSequence}</td>
+                                                </tr>
+                                                {Object.values(entry.sequenceInfo || {}).map((sequence) => (
+                                                    <tr key={entry.partitionInfo?.partitionId + "-" + sequence.typeSequence} className="text-muted">
+                                                        <td></td>
+                                                        <td colSpan="3" style={{paddingLeft: "2em"}}>{sequence.typeSequence}</td>
+                                                        <td>{sequence.zeebeRecordPosition}</td>
+                                                        <td>{sequence.zeebeRecordSequence}</td>
+                                                    </tr>
+                                                ))}
+                                            </React.Fragment>
                                         ))}
                                         </tbody>
                                     </table>
@@ -169,11 +183,41 @@ class CheckData extends React.Component {
 
                 </div>
 
+                <div className="row" style={{width: "100%", marginTop: "10px"}}>
+                    <div className="col-md-12">
+                        <Card>
+                            <Card.Header style={{backgroundColor: "rgba(0,0,0,.03)"}}>How to read these positions</Card.Header>
+                            <Card.Body className="text-muted" style={{fontSize: "0.85rem"}}>
+                                <p><b>Processed position</b> is the last position of the log of the partition that the broker has finished processing.
+                                    <b> Exported position</b> is the last position the exporters have acknowledged. The two do not have to be equal:
+                                    some records are written to the log and exported without being processed as a command (for example the events
+                                    produced by a timer or a boundary event), so the exported position can be a little higher than the processed one.</p>
+                                <p><b>Zeebe record: last position</b> is the highest position found in the zeebe-record indices of Elasticsearch.
+                                    It only counts the records that were really indexed. The exporter does not write every record of the log to
+                                    Elasticsearch, only the types of records it is configured to export, and it writes them in batches. The last position
+                                    acknowledged by the exporters can be a record that is not in the index, so the exported position can be higher than
+                                    the last position found in Elasticsearch.</p>
+                                <p><b>Last sequence</b> is the sequence number of the last record indexed for a type of record. The partition number
+                                    is stored in the high bits of the number (the value is partition * 2^51 + a counter), which is why the number looks
+                                    so large: for the partition 1, 2251799813685738 means 490 records of this type.</p>
+                            </Card.Body>
+                        </Card>
+                    </div>
+                </div>
+
             </div>
         )
 
     }
 
+
+    /**
+     * The partitions of the answer: the API gives an object, the key is the partition id
+     */
+    partitions() {
+        const synthesis = this.state.dashboard?.synthesis;
+        return synthesis ? Object.values(synthesis) : [];
+    }
 
     checkData = () => {
         let uri = 'blueberry/api/checkdata?';
@@ -191,12 +235,19 @@ class CheckData extends React.Component {
         this.setDisplayProperty("loading", false);
         if (httpPayload.isError()) {
             console.log("checkData.checkDataCallback: error " + httpPayload.getError());
-            this.setState({status: "Error"});
+            this.setState({
+                status: "Error",
+                dashboard: {},
+                resultCall: {status: 500, error: "Error", errorMessage: httpPayload.getError()}
+            });
         } else {
             this.setState(
                 {
+                    // The API answers {error, errorMessage} when a check failed: they are displayed in a red box (ControllerPage)
                     resultCall: {
-                        status: httpPayload.getData().status
+                        status: httpPayload.getData().status,
+                        error: httpPayload.getData().error || "",
+                        errorMessage: httpPayload.getData().errorMessage || ""
                     },
                     dashboard: httpPayload.getData()
                 })

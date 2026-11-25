@@ -1,6 +1,6 @@
 package io.camunda.blueberry.exception;
 
-import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.BackupComponentInt;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -8,15 +8,15 @@ import java.util.Map;
 public class BackupException extends OperationException {
 
     private final Long backupId;
-    private final CamundaApplicationInt.COMPONENT component;
+    private final BackupComponentInt.COMPONENT component;
 
-    public BackupException(CamundaApplicationInt.COMPONENT component, int status, String error, String message, Long backupId) {
+    public BackupException(BackupComponentInt.COMPONENT component, int status, String error, String message, Long backupId) {
         super(BLUEBERRYERRORCODE.BACKUP, status, error, message);
         this.component = component;
         this.backupId = backupId;
     }
 
-    public static BackupException getInstanceFromException(CamundaApplicationInt.COMPONENT component, Long backupId, Exception e) {
+    public static BackupException getInstanceFromException(BackupComponentInt.COMPONENT component, Long backupId, Exception e) {
         OperationException operationException = getInstanceFromException(BLUEBERRYERRORCODE.BACKUP, e);
         return new BackupException(component, operationException.getStatus(), operationException.getError(), operationException.getMessage(), backupId);
     }
@@ -25,7 +25,7 @@ public class BackupException extends OperationException {
         return backupId;
     }
 
-    public CamundaApplicationInt.COMPONENT getComponent() {
+    public BackupComponentInt.COMPONENT getComponent() {
         return component;
     }
 

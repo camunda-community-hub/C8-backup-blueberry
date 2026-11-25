@@ -15,11 +15,8 @@ public class ResultCheckOperation {
     public static final String TYPE = "type";
     public static final String MESSAGE = "message";
     public static final String LEVEL = "level";
-
-    public enum LEVELMSG {ERROR, INFO, DEBUG}
-    private List<Message> listMessages = new ArrayList<>();
-
-    private Map<ElasticSearchConnect.COMPONENT_IMPORTER, Boolean> importerIsLate = new HashMap<>();
+    private final List<Message> listMessages = new ArrayList<>();
+    private final Map<ElasticSearchConnect.COMPONENT_IMPORTER, Boolean> importerIsLate = new HashMap<>();
     private Boolean zeebeExporterIsLate = null;
 
     public void addInconsistentMessage(int partitionId, String message) {
@@ -29,12 +26,13 @@ public class ResultCheckOperation {
     public void addDebugMessage(int partitionId, String message) {
         addMessage(LEVELMSG.DEBUG, "DEBUG", partitionId, message);
     }
+
     public void addMessage(LEVELMSG level, String type, int partitionId, String message) {
         Message msg = new Message();
         msg.partitionId = partitionId;
         msg.message = message;
         msg.level = level;
-        msg.type=type;
+        msg.type = type;
         listMessages.add(msg);
 
     }
@@ -50,16 +48,16 @@ public class ResultCheckOperation {
             zeebeExporterIsLate = resultCheck.zeebeExporterIsLate;
     }
 
-
     public Boolean isImporterIsLate(ElasticSearchConnect.COMPONENT_IMPORTER component) {
         return importerIsLate.getOrDefault(component, Boolean.FALSE);
     }
+
     public Boolean isOneImporterIsLate() {
         return importerIsLate.values().stream().anyMatch(v -> Boolean.FALSE.equals(v));
     }
 
     public Boolean isZeebeExporterIsLate() {
-        return zeebeExporterIsLate == null ? false : zeebeExporterIsLate;
+        return zeebeExporterIsLate != null && zeebeExporterIsLate;
     }
 
     public void setImporterIsLate(ElasticSearchConnect.COMPONENT_IMPORTER component, boolean importerIsLate) {
@@ -69,7 +67,6 @@ public class ResultCheckOperation {
     public void setZeebeExporterIsLate(boolean zeebeExporterIsLate) {
         this.zeebeExporterIsLate = zeebeExporterIsLate;
     }
-
 
     public List<Message> getInconsistentMessage() {
         return listMessages.stream()
@@ -87,11 +84,13 @@ public class ResultCheckOperation {
         return listMessages;
     }
 
-
     public Map<String, Object> toMap() {
         ObjectMapper mapper = new ObjectMapper();
         return mapper.convertValue(this, Map.class);
     }
+
+
+    public enum LEVELMSG {ERROR, INFO, DEBUG}
 
     public class Message {
         public LEVELMSG level;
@@ -100,9 +99,9 @@ public class ResultCheckOperation {
         public String message;
 
         public Map<String, Object> toMap() {
-            Map<String,Object> map = new HashMap<>();
+            Map<String, Object> map = new HashMap<>();
             map.put(PARTITIONID, partitionId);
-            map.put(MESSAGE,  message);
+            map.put(MESSAGE, message);
             map.put(LEVEL, level);
             map.put(TYPE, type);
             return map;

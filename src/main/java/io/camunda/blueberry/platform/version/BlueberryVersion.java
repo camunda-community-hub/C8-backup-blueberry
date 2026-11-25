@@ -28,6 +28,24 @@ public class BlueberryVersion {
     private final Logger logger = LoggerFactory.getLogger(BlueberryVersion.class);
     private volatile String version;
 
+    /**
+     * @param stream the pom.properties, null if absent
+     * @return the version, null if it is not there
+     */
+    static String fromPomProperties(InputStream stream) {
+        if (stream == null) {
+            return null;
+        }
+        try (InputStream in = stream) {
+            Properties properties = new Properties();
+            properties.load(in);
+            String value = properties.getProperty("version");
+            return value == null || value.isBlank() ? null : value.trim();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public String get() {
         String value = version;
         if (value == null) {
@@ -49,24 +67,6 @@ public class BlueberryVersion {
         String fromManifest = BlueberryVersion.class.getPackage() == null ? null
                 : BlueberryVersion.class.getPackage().getImplementationVersion();
         return fromManifest == null ? UNKNOWN : fromManifest;
-    }
-
-    /**
-     * @param stream the pom.properties, null if absent
-     * @return the version, null if it is not there
-     */
-    static String fromPomProperties(InputStream stream) {
-        if (stream == null) {
-            return null;
-        }
-        try (InputStream in = stream) {
-            Properties properties = new Properties();
-            properties.load(in);
-            String value = properties.getProperty("version");
-            return value == null || value.isBlank() ? null : value.trim();
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     /**

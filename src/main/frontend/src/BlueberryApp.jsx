@@ -11,7 +11,7 @@ import './index.scss';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-import {Container, Form, Nav, Navbar} from 'react-bootstrap';
+import {Container, Nav, Navbar} from 'react-bootstrap';
 import Dashboard from "./dashboard/Dashboard";
 import Scheduler from "./scheduler/Scheduler";
 import Backup from "./backup/Backup"
@@ -35,8 +35,6 @@ const FRAME_NAME = {
 
 }
 
-const VERSION_STORAGE_KEY = "blueberry.camunda.minorVersion";
-
 class BlueberryApp extends React.Component {
 
 
@@ -44,62 +42,25 @@ class BlueberryApp extends React.Component {
     super();
     this.state = {
       frameContent: FRAME_NAME.DASHBOARD,
-      camundaVersion: "8.7",
-      supportedMinors: ["8.7", "8.8", "8.9", "8.10"],
       docsBackupUrl: "",
       docsRestoreUrl: "",
       // The version of Blueberry: given by the REST API blueberry/api/version (the pom.xml), not written here
       blueberryVersion: ""
     };
     this.clickMenu = this.clickMenu.bind(this);
-    this.onVersionChange = this.onVersionChange.bind(this);
   }
 
   componentDidMount() {
-    const stored = localStorage.getItem(VERSION_STORAGE_KEY);
-    if (stored) {
-      this.setState({camundaVersion: stored});
-    }
     RestCallService.getInstance().getJson("blueberry/api/version?", this, (httpPayload) => {
       if (!httpPayload.isError()) {
         const data = httpPayload.getData();
-        const minor = stored || data.minorVersion || "8.7";
         this.setState({
-          camundaVersion: minor,
-          supportedMinors: data.supportedMinors || this.state.supportedMinors,
           docsBackupUrl: data.docsBackupUrl,
           docsRestoreUrl: data.docsRestoreUrl,
           blueberryVersion: data.blueberryVersion || ""
         });
-        if (stored && stored !== data.minorVersion) {
-          this.syncVersionToServer(stored);
-        }
       }
     });
-  }
-
-  syncVersionToServer(minor) {
-    RestCallService.getInstance().putJson(
-      "blueberry/api/version?",
-      {minorVersion: minor},
-      this,
-      (httpPayload) => {
-        if (!httpPayload.isError()) {
-          const data = httpPayload.getData();
-          this.setState({
-            docsBackupUrl: data.docsBackupUrl,
-            docsRestoreUrl: data.docsRestoreUrl
-          });
-        }
-      }
-    );
-  }
-
-  onVersionChange(event) {
-    const minor = event.target.value;
-    localStorage.setItem(VERSION_STORAGE_KEY, minor);
-    this.setState({camundaVersion: minor});
-    this.syncVersionToServer(minor);
   }
 
 
@@ -150,20 +111,11 @@ class BlueberryApp extends React.Component {
               }}>{FRAME_NAME.PARAMETERS}</Nav.Link>
 
             </Nav>
-            <Form.Select
-              size="sm"
-              style={{width: "110px"}}
-              aria-label="Camunda version"
-              value={this.state.camundaVersion}
-              onChange={this.onVersionChange}>
-              {this.state.supportedMinors.map(v =>
-                <option key={v} value={v}>{v}</option>)}
-            </Form.Select>
           </Container>
         </Navbar>
         {this.state.docsBackupUrl &&
           <div className="container" style={{marginTop: "4px", fontSize: "0.85rem"}}>
-            Docs for Camunda {this.state.camundaVersion}:{" "}
+            Camunda documentation:{" "}
             <a href={this.state.docsBackupUrl} target="_blank" rel="noreferrer">Backup</a>
             {" · "}
             <a href={this.state.docsRestoreUrl} target="_blank" rel="noreferrer">Restore</a>
@@ -172,7 +124,6 @@ class BlueberryApp extends React.Component {
         {this.state.frameContent === FRAME_NAME.DASHBOARD && <Dashboard/>}
         {this.state.frameContent === FRAME_NAME.BACKUP && <Backup/>}
         {this.state.frameContent === FRAME_NAME.SCHEDULER && <Scheduler/>}
-        {this.state.frameContent === FRAME_NAME.RESTORE && <Restore/>}
         {this.state.frameContent === FRAME_NAME.OPERATIONLOG && <OperationLog/>}
         {this.state.frameContent === FRAME_NAME.CHECKDATA && <CheckData/>}
         {this.state.frameContent === FRAME_NAME.RESTORE &&

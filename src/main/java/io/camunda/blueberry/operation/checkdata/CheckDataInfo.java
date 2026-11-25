@@ -1,8 +1,8 @@
 package io.camunda.blueberry.operation.checkdata;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.ZeebeConnect;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -80,6 +80,11 @@ public class CheckDataInfo {
 
     }
 
+    public Map<String, Object> toMap() {
+        ObjectMapper mapper = new ObjectMapper();
+        return mapper.convertValue(this, Map.class);
+    }
+
     /**
      * PartitionSynthesis
      */
@@ -98,7 +103,6 @@ public class CheckDataInfo {
 
     }
 
-
     /**
      * SequenceInfoSynthesis
      */
@@ -112,11 +116,6 @@ public class CheckDataInfo {
         public SequenceInfoSynthesis(String typeSequence) {
             this.typeSequence = typeSequence;
         }
-    }
-
-    public Map<String, Object> toMap() {
-        ObjectMapper mapper = new ObjectMapper();
-        return mapper.convertValue(this, Map.class);
     }
 
 }

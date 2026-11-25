@@ -2,11 +2,7 @@ package io.camunda.blueberry.api;
 
 import io.camunda.blueberry.connect.BackupInfo;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Builds dashboard backup timeline entries from merged {@link BackupInfo} lists.
@@ -31,7 +27,7 @@ public final class DashboardBackupViewHelper {
             point.put("value", historyBarValue(info.status));
             point.put("status", statusKey(info.status));
             if (info.backupTime != null) {
-                point.put("backupTime", info.backupTime.toString() + "Z");
+                point.put("backupTime", info.backupTime + "Z");
             }
             history.add(point);
         }
@@ -51,7 +47,7 @@ public final class DashboardBackupViewHelper {
             point.put("backupId", info.backupId);
             point.put("status", statusKey(info.status));
             if (info.backupTime != null) {
-                point.put("backupTime", info.backupTime.toString() + "Z");
+                point.put("backupTime", info.backupTime + "Z");
             }
             timeline.add(point);
         }
@@ -71,7 +67,7 @@ public final class DashboardBackupViewHelper {
         summary.put("backupId", latest.backupId);
         summary.put("status", statusKey(latest.status));
         if (latest.backupTime != null) {
-            summary.put("backupTime", latest.backupTime.toString() + "Z");
+            summary.put("backupTime", latest.backupTime + "Z");
         }
         return summary;
     }

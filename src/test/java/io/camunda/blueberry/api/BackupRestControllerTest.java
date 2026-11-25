@@ -15,7 +15,7 @@ class BackupRestControllerTest {
 
     @Test
     void theParametersComeFromTheClusterThenFromTheConfiguration() {
-        BackupRestController controller = new BackupRestController(null, null, null,
+        BackupRestController controller = new BackupRestController(null, null,
                 TestOrchestration.build(Map.of("backupRetentionWindow", "P7D", "backupSchedule", "PT10M"), ENV));
 
         Map<String, Object> parameter = controller.backupParameter();
@@ -32,7 +32,7 @@ class BackupRestControllerTest {
 
     @Test
     void manualModeAndUnknownValues() {
-        BackupRestController controller = new BackupRestController(null, null, null,
+        BackupRestController controller = new BackupRestController(null, null,
                 TestOrchestration.build(Map.of("backupContinuous", "false"), null));
 
         Map<String, Object> parameter = controller.backupParameter();
@@ -46,7 +46,7 @@ class BackupRestControllerTest {
     @Test
     void theSchedulerAndTheRetentionAreBlankInManualMode() {
         // the configuration of Blueberry gives values, but the cluster is in manual mode: they are not used
-        BackupRestController controller = new BackupRestController(null, null, null,
+        BackupRestController controller = new BackupRestController(null, null,
                 TestOrchestration.build(Map.of("backupContinuous", "false", "backupSchedule", "PT10M", "backupRetentionWindow", "P7D"), null));
 
         Map<String, Object> parameter = controller.backupParameter();

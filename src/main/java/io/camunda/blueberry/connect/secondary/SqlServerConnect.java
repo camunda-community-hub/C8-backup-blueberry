@@ -1,23 +1,17 @@
 package io.camunda.blueberry.connect.secondary;
 
-import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.connect.BackupComponentInt;
 import io.camunda.blueberry.connect.BackupInfo;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -81,6 +75,17 @@ public class SqlServerConnect implements SecondaryStorageInt {
         this.orchestrationParameter = orchestrationParameter;
     }
 
+    static Long parseBackupId(String backupName) {
+        if (backupName == null || !backupName.startsWith(BACKUP_NAME_PREFIX)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(backupName.substring(BACKUP_NAME_PREFIX.length()));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     @Override
     public String getName() {
         return NAME;
@@ -95,14 +100,14 @@ public class SqlServerConnect implements SecondaryStorageInt {
                 .equals(SecondaryStorageFactory.normalize(NAME));
     }
 
-    @Override
-    public CamundaApplicationInt.COMPONENT getComponent() {
-        return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
-    }
-
     /* ******************************************************************** */
     /*  Backup                                                              */
     /* ******************************************************************** */
+
+    @Override
+    public BackupComponentInt.COMPONENT getComponent() {
+        return BackupComponentInt.COMPONENT.SECONDARYSTORAGE;
+    }
 
     /**
      * Start the backup: BACKUP DATABASE runs in the SQL Server while the connection is open, so it is executed in a
@@ -119,7 +124,7 @@ public class SqlServerConnect implements SecondaryStorageInt {
             return backupOperation;
         }
         String sql = backupStatement(backupId);
-        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Start the SQL Server backup: " + sql);
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Start the SQL Server backup: " + sql);
         runningBackups.put(backupId, CompletableFuture.runAsync(() -> {
             try (Connection connection = connect(); Statement statement = connection.createStatement()) {
                 statement.setQueryTimeout(0); // a backup is long
@@ -132,6 +137,10 @@ public class SqlServerConnect implements SecondaryStorageInt {
         return backupOperation;
     }
 
+    /* ******************************************************************** */
+    /*  List                                                                */
+    /* ******************************************************************** */
+
     @Override
     public BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
         BackupOperation backupOperation = new BackupOperation();
@@ -143,7 +152,7 @@ public class SqlServerConnect implements SecondaryStorageInt {
         }
         try {
             future.get();
-            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "SQL Server backup " + backupId + " completed");
+            operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "SQL Server backup " + backupId + " completed");
             backupOperation.status = 200;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -153,14 +162,10 @@ public class SqlServerConnect implements SecondaryStorageInt {
             backupOperation.status = 500;
             backupOperation.title = "SQL Server backup " + backupId + " failed";
             backupOperation.message = e.getCause() == null ? e.getMessage() : e.getCause().getMessage();
-            operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, backupOperation.title + ": " + backupOperation.message);
+            operationLog.error(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, backupOperation.title + ": " + backupOperation.message);
         }
         return backupOperation;
     }
-
-    /* ******************************************************************** */
-    /*  List                                                                */
-    /* ******************************************************************** */
 
     /**
      * The backups made by Blueberry: the history of msdb, the backups named camunda_{backupId}
@@ -184,7 +189,7 @@ public class SqlServerConnect implements SecondaryStorageInt {
                     }
                     BackupInfo backupInfo = new BackupInfo();
                     backupInfo.backupId = backupId;
-                    backupInfo.components.add(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE);
+                    backupInfo.components.add(BackupComponentInt.COMPONENT.SECONDARYSTORAGE);
                     // a row in the history is written when the backup is finished
                     backupInfo.status = BackupInfo.Status.COMPLETED;
                     Timestamp start = resultSet.getTimestamp("backup_start_date");
@@ -201,14 +206,14 @@ public class SqlServerConnect implements SecondaryStorageInt {
         return listBackups;
     }
 
+    /* ******************************************************************** */
+    /*  Restore                                                             */
+    /* ******************************************************************** */
+
     @Override
     public String getUrlListBackup() {
         return url;
     }
-
-    /* ******************************************************************** */
-    /*  Restore                                                             */
-    /* ******************************************************************** */
 
     @Override
     public List<String> getAliases() {
@@ -241,6 +246,10 @@ public class SqlServerConnect implements SecondaryStorageInt {
         }
     }
 
+    /* ******************************************************************** */
+    /*  T-SQL                                                               */
+    /* ******************************************************************** */
+
     /**
      * Restore the database from the backup. DESTRUCTIVE: the database is replaced (WITH REPLACE), all connections are
      * closed (SINGLE_USER). It is not called by the backup, and the Camunda cluster must be stopped before.
@@ -271,10 +280,6 @@ public class SqlServerConnect implements SecondaryStorageInt {
         }
     }
 
-    /* ******************************************************************** */
-    /*  T-SQL                                                               */
-    /* ******************************************************************** */
-
     /**
      * BACKUP DATABASE [db] TO DISK = N'path/camunda_12.bak' WITH INIT, CHECKSUM, NAME = N'camunda_12'
      */
@@ -296,17 +301,6 @@ public class SqlServerConnect implements SecondaryStorageInt {
         return kind + " = N'" + file.replace("'", "''") + "'";
     }
 
-    static Long parseBackupId(String backupName) {
-        if (backupName == null || !backupName.startsWith(BACKUP_NAME_PREFIX)) {
-            return null;
-        }
-        try {
-            return Long.parseLong(backupName.substring(BACKUP_NAME_PREFIX.length()));
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
     /**
      * @return null if the configuration is complete, else what is missing
      */
@@ -323,7 +317,24 @@ public class SqlServerConnect implements SecondaryStorageInt {
         return null;
     }
 
+    @Override
+    public PingStatus ping() {
+        if (url == null || url.isBlank()) {
+            return PingStatus.NOT_CONNECTED;
+        }
+        try {
+            DriverManager.setLoginTimeout(3);
+            try (Connection connection = connect()) {
+                return connection.isValid(3) ? PingStatus.CONNECTED : PingStatus.NOT_CONNECTED;
+            }
+        } catch (SQLException e) {
+            logger.debug("SQL Server ping failed: {}", e.getMessage());
+            return PingStatus.NOT_CONNECTED;
+        }
+    }
+
     private Connection connect() throws SQLException {
         return DriverManager.getConnection(url, username, password);
     }
 }
+

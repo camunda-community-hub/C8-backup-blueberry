@@ -1,6 +1,7 @@
 package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,6 +40,14 @@ public interface Rule {
      * A rule is executed, and this is the information returned for this execution
      */
     class RuleInfo {
+        /**
+         * Helm values to expose env, with its values (the name is show-values, with a dash: show.values is ignored)
+         */
+        private static final String ENV_SHOW_VALUES_CONFIGURATION =
+                "- name: management.endpoints.web.exposure.include\n"
+                        + "  value: health, prometheus, loggers, usage-metrics, backups, env\n"
+                        + "- name: management.endpoint.env.show-values\n"
+                        + "  value: ALWAYS\n";
         private final Rule rule;
         private final StringBuilder details = new StringBuilder();
         private final StringBuilder errors = new StringBuilder();
@@ -58,8 +67,6 @@ public interface Rule {
             this.details.append(details + ";");
         }
 
-
-
         public void addError(String error) {
             this.errors.append(error + ";");
         }
@@ -70,7 +77,6 @@ public interface Rule {
             }
             return details.toString();
         }
-
 
         public String getErrors() {
             return errors.toString();
@@ -102,6 +108,7 @@ public interface Rule {
 
         /**
          * Add activity. Saved in the listVerifications to keep the order.
+         *
          * @param activity
          * @param actionStatus
          * @param command
@@ -109,6 +116,7 @@ public interface Rule {
         public void addActivity(String activity, RuleStatus actionStatus, String command) {
             this.listVerifications.add(new Tuple(null, activity, actionStatus, command));
         }
+
         public void addVerifications(String action, RuleStatus actionStatus, String command) {
             this.listVerifications.add(new Tuple(action, null, actionStatus, command));
         }
@@ -191,15 +199,6 @@ public interface Rule {
             }
         }
 
-        /**
-         * Helm values to expose env, with its values (the name is show-values, with a dash: show.values is ignored)
-         */
-        private static final String ENV_SHOW_VALUES_CONFIGURATION =
-                "- name: management.endpoints.web.exposure.include\n"
-                        + "  value: health, prometheus, loggers, usage-metrics, backups, env\n"
-                        + "- name: management.endpoint.env.show-values\n"
-                        + "  value: ALWAYS\n";
-
         public Rule getRule() {
             return this.rule;
         }
@@ -210,13 +209,14 @@ public interface Rule {
          * @param error         explanation of a failure, or an information
          * @param configuration configuration to apply (Helm values, YAML), displayed in a box. Null if none
          */
-        public record Tuple(String action, String activity, RuleStatus actionStatus, String command, String error, String configuration) {
+        public record Tuple(String action, String activity, RuleStatus actionStatus, String command, String error,
+                            String configuration) {
             public Tuple(String action, String activity, RuleStatus actionStatus, String command) {
-                this(action,  activity, actionStatus, command, null, null);
+                this(action, activity, actionStatus, command, null, null);
             }
 
             public Tuple(String action, String activity, RuleStatus actionStatus, String command, String error) {
-                this(action,  activity, actionStatus, command, error, null);
+                this(action, activity, actionStatus, command, error, null);
             }
         }
     }

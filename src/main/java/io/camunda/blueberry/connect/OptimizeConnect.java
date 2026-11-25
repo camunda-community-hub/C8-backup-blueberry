@@ -1,6 +1,8 @@
 package io.camunda.blueberry.connect;
 
 import io.camunda.blueberry.config.BlueberryConfig;
+import io.camunda.blueberry.connect.cluster.ClusterConnect;
+import io.camunda.blueberry.connect.cluster.ClusterFactory;
 import io.camunda.blueberry.connect.toolbox.WebActuator;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
@@ -13,15 +15,23 @@ import org.springframework.web.client.RestTemplate;
 import java.util.List;
 
 @Component
-public class OptimizeConnect implements CamundaApplicationInt {
+public class OptimizeConnect implements BackupComponentInt {
 
+    /**
+     * The result of the question to the actuator is kept some seconds: isActive() is asked often
+     */
+    private static final long CACHE_MILLIS = 10_000;
     private final BlueberryConfig blueberryConfig;
     private final RestTemplate restTemplate;
     private final WebActuator webActuator;
+    private final ClusterFactory clusterFactory;
     Logger logger = LoggerFactory.getLogger(OptimizeConnect.class.getName());
+    private volatile boolean reachable;
+    private volatile long reachableTime;
 
-    public OptimizeConnect(BlueberryConfig blueberryConfig, RestTemplate restTemplate) {
+    public OptimizeConnect(BlueberryConfig blueberryConfig, RestTemplate restTemplate, ClusterFactory clusterFactory) {
         webActuator = new WebActuator(restTemplate);
+        this.clusterFactory = clusterFactory;
 
         this.blueberryConfig = blueberryConfig;
         this.restTemplate = restTemplate;
@@ -33,13 +43,6 @@ public class OptimizeConnect implements CamundaApplicationInt {
     public boolean isConnected() {
         return webActuator.isConnected(COMPONENT.OPTIMIZE, blueberryConfig.getOptimizeActuatorUrl() + "/actuator");
     }
-
-    /**
-     * The result of the question to the actuator is kept some seconds: isActive() is asked often
-     */
-    private static final long CACHE_MILLIS = 10_000;
-    private volatile boolean reachable;
-    private volatile long reachableTime;
 
     /**
      * @return true if Blueberry can ask Optimize: an URL is set (blueberry.optimizeActuatorUrl), and it is not the URL of Zeebe
@@ -96,27 +99,53 @@ public class OptimizeConnect implements CamundaApplicationInt {
      *
      * @return
      */
-    public CamundaApplicationInt.ConnectionInfo isConnectedInformation() {
-        return new CamundaApplicationInt.ConnectionInfo(isConnected(), "Url Connection [" + blueberryConfig.getOptimizeActuatorUrl() + "/actuator]");
-    }
-
-    @Override
-    public boolean exist() {
-        // Optimize is optional: it is part of the cluster when it is enabled and has an URL
-        return isActive();
+    public ConnectionInfo isConnectedInformation() {
+        return new ConnectionInfo(isConnected(), "Url Connection [" + blueberryConfig.getOptimizeActuatorUrl() + "/actuator]");
     }
 
     public COMPONENT getComponent() {
         return COMPONENT.OPTIMIZE;
     }
 
-
-    public BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
-        return webActuator.startBackup(CamundaApplicationInt.COMPONENT.OPTIMIZE, backupId, blueberryConfig.getOptimizeActuatorUrl(), operationLog);
+    /**
+     * Stop Optimize (the restore needs it): Kubernetes scales its Deployment down, Docker stops its container,
+     * see blueberry.cluster.type. The REST API of Camunda can't do it.
+     *
+     * @return the number of replicas before the stop (0 if Optimize was already stopped), to give to {@link #start(int, OperationLog)}
+     */
+    public int stop(OperationLog operationLog) throws OperationException {
+        return cluster().stopOptimize(operationLog);
     }
 
-    public CamundaApplicationInt.BackupOperation waitBackup(Long backupId, OperationLog operationLog) {
-        return webActuator.waitBackup(CamundaApplicationInt.COMPONENT.OPTIMIZE, backupId, blueberryConfig.getOptimizeActuatorUrl(), operationLog);
+    /**
+     * Start Optimize again, after {@link #stop(OperationLog)}. Nothing is done if replicas is 0.
+     */
+    public void start(int replicas, OperationLog operationLog) throws OperationException {
+        cluster().startOptimize(replicas, operationLog);
+    }
+
+    private ClusterConnect cluster() throws OperationException {
+        ClusterConnect cluster = clusterFactory == null ? null : clusterFactory.getCluster();
+        if (cluster == null) {
+            throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Cluster type unknown",
+                    "blueberry.cluster.type is [" + (clusterFactory == null ? "" : clusterFactory.getConfiguredType()) + "]. Supported: "
+                            + (clusterFactory == null ? "" : String.join(", ", clusterFactory.getSupportedNames())));
+        }
+        return cluster;
+    }
+
+
+    public BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
+        BackupOperation started = webActuator.startBackup(BackupComponentInt.COMPONENT.OPTIMIZE, backupId, blueberryConfig.getOptimizeActuatorUrl(), operationLog);
+        if (!started.isOk()) {
+            return started;
+        }
+        // Optimize accepts the request and takes its snapshots in the background: if they fail, finish here
+        return webActuator.confirmBackupCreated(BackupComponentInt.COMPONENT.OPTIMIZE, backupId, blueberryConfig.getOptimizeActuatorUrl(), operationLog, started);
+    }
+
+    public BackupComponentInt.BackupOperation waitBackup(Long backupId, OperationLog operationLog) {
+        return webActuator.waitBackup(BackupComponentInt.COMPONENT.OPTIMIZE, backupId, blueberryConfig.getOptimizeActuatorUrl(), operationLog);
     }
 
     @Override
@@ -126,6 +155,7 @@ public class OptimizeConnect implements CamundaApplicationInt {
 
     @Override
     public String getUrlListBackup() {
-        return  blueberryConfig.getOptimizeActuatorUrl()+"/actuator/backups";
+        return blueberryConfig.getOptimizeActuatorUrl() + "/actuator/backups";
     }
 }
+

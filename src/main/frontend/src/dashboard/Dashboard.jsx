@@ -45,6 +45,10 @@ class Dashboard extends React.Component {
                 },
                 configuration: {
                     statusConfiguration: "CORRECT",
+                    secondaryStorage: "",
+                    cluster: "",
+                    backupMode: "",
+                    backupRetention: "",
                     elasticsearch: "disabled",
                     optimize: "enabled",
                 },
@@ -59,6 +63,8 @@ class Dashboard extends React.Component {
             connection: {
                 zeebe: {connection: "VERIFICATION_IN_PROGRESS"},
                 elasticsearch: {connection: "VERIFICATION_IN_PROGRESS"},
+                secondaryStorage: {connection: "VERIFICATION_IN_PROGRESS"},
+                cluster: {connection: "VERIFICATION_IN_PROGRESS"},
                 optimize: {connection: "VERIFICATION_IN_PROGRESS"},
                 status: ""
             },
@@ -214,6 +220,32 @@ class Dashboard extends React.Component {
                                         </td>
                                     </tr>
                                     <tr>
+                                        <td>Secondary storage</td>
+                                        <td style={{textAlign: "center"}}>
+                                            {this.state.dashboard.configuration.secondaryStorage || "Unknown"}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Cluster</td>
+                                        <td style={{textAlign: "center"}}>
+                                            {this.state.dashboard.configuration.cluster || "Unknown"}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Backup mode</td>
+                                        <td style={{textAlign: "center"}}>
+                                            {this.state.dashboard.configuration.backupMode
+                                                ? this.state.dashboard.configuration.backupMode.toLowerCase()
+                                                : "Unknown"}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Backup retention period</td>
+                                        <td style={{textAlign: "center"}}>
+                                            {this.state.dashboard.configuration.backupRetention || "Unknown"}
+                                        </td>
+                                    </tr>
+                                    <tr>
                                         <td>Scheduler</td>
                                         <td style={{textAlign: "center"}}>
                                             {this.state.dashboard.scheduler.statusScheduler === "ACTIVE" &&
@@ -229,7 +261,7 @@ class Dashboard extends React.Component {
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td>ElasticSearch</td>
+                                        <td>ElasticSearch For Optimize</td>
                                         <td style={{textAlign: "center"}}>
                                             {this.state.dashboard.configuration.elasticsearch === "enabled" &&
                                                 <Tag type="green">enabled</Tag>}
@@ -263,6 +295,10 @@ class Dashboard extends React.Component {
                                             <br/>
                                             <span className="text-muted">{this.state.dashboard.cluster.statusLabel}</span>
                                         </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Zeebe version</td>
+                                        <td style={{textAlign: "right"}}>{this.state.connection?.zeebeVersion || ""}</td>
                                     </tr>
                                     <tr>
                                         <td>Cluster Size</td>
@@ -300,21 +336,21 @@ class Dashboard extends React.Component {
                                         <td style={{textAlign: "center"}}>
                                             {this.renderConnection("Zeebe Actuator", this.state.connection?.zeebeActuator)}
                                         </td>
-                                        {this.state.dashboard.configuration.elasticsearch === "enabled" &&
-                                            <td>
-                                                {this.renderConnection("ElasticSearch", this.state.connection?.elasticsearch)}
-                                            </td>}
+                                        <td style={{textAlign: "center"}}>
+                                            {this.renderConnection("Secondary Storage", this.state.connection?.secondaryStorage)}
+                                        </td>
+                                        <td style={{textAlign: "center"}}>
+                                            {this.renderConnection("Cluster", this.state.connection?.cluster)}
+                                        </td>
                                         {this.state.dashboard.configuration.optimize === "enabled" &&
                                             <td>
                                                 {this.renderConnection("Optimize", this.state.connection?.optimize)}
                                             </td>}
+                                        {this.state.dashboard.configuration.elasticsearch === "enabled" &&
+                                            <td>
+                                                {this.renderConnection("ElasticSearch for Optimize", this.state.connection?.elasticsearch)}
+                                            </td>}
                                     </tr>
-                                    {this.state.connection?.zeebeVersion &&
-                                        <tr>
-                                            <td colSpan="4" style={{textAlign: "center"}}>
-                                                Zeebe version: <b>{this.state.connection.zeebeVersion}</b>
-                                            </td>
-                                        </tr>}
                                     <tr>
                                         <td colSpan="4">
                                             {this.state.connection.status}
@@ -407,6 +443,12 @@ class Dashboard extends React.Component {
 
             case "NOT_CONNECTED":
                 return <Tag type="purple">Not connected</Tag>;
+
+            case "CONNECTED":
+                return <Tag type="green">Connected</Tag>;
+
+            case "NO_IMPLEMENTATION":
+                return <Tag type="gray">No implementation</Tag>;
 
             case "VERIFICATION_IN_PROGRESS":
                 return <Tag type="blue">Verification in progress</Tag>;

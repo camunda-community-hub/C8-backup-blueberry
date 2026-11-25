@@ -5,10 +5,37 @@ blueberry:
 
   # This information is temporary. They must come from the pod itself
   optimizeRepository : optimizerepository
-  zeebeRepository: zeeberecordrepository
 
   restore:
     execution: false
+
+  # The platform where Optimize runs. The restore stops Optimize (the REST API can't) and starts it again. The cluster is
+  # not used when Optimize is not in the cluster.
+  cluster:
+    # kubernetes or docker
+    type: kubernetes
+    kubernetes:
+      namespace: camunda
+      # Outside the cluster: a kubeconfig file (src/main/resources/kube-proxy.yaml works with kubectl proxy --port=8001),
+      # or kubeContext, a context of ~/.kube/config. Inside the cluster: nothing, give a service account to the pod
+      # (get, list, patch on deployments/scale).
+      # kubeConfig: /path/to/kubeconfig
+      # kubeContext: kind-camunda-platform-local
+      # The Deployment of Optimize is optimizeDeployment, else <helmRelease>-optimize
+      helmRelease: camunda87helm
+      # optimizeDeployment: camunda-optimize
+      podDeleteTimeoutSeconds: 300
+      token: gcloud
+      masterUrl: "https"
+      certificate-authority-data: ""
+      name: ""
+    docker:
+      # The docker executable (it must be in the PATH of Blueberry), and optionally --host
+      command: docker
+      # host: tcp://localhost:2375
+      # Every container whose name contains this text is Optimize (docker ps --all, column NAMES)
+      optimizeContainerFilter: optimize
+      stopTimeoutSeconds: 60
 
   optimize:
     enabled: false

@@ -1,6 +1,6 @@
 package io.camunda.blueberry.exception;
 
-import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.BackupComponentInt;
 
 public class CommunicationException extends OperationException {
 
@@ -8,7 +8,7 @@ public class CommunicationException extends OperationException {
         super(blueberryErrorCode, 0, "No communication", e.getMessage());
     }
 
-    public static CommunicationException getInstanceFromComponent(CamundaApplicationInt.COMPONENT component, Exception e) {
+    public static CommunicationException getInstanceFromComponent(BackupComponentInt.COMPONENT component, Exception e) {
         OperationException.BLUEBERRYERRORCODE blueberryErrorCode;
         switch (component) {
             case ZEEBE:
@@ -24,3 +24,4 @@ public class CommunicationException extends OperationException {
         return new CommunicationException(blueberryErrorCode, e);
     }
 }
+

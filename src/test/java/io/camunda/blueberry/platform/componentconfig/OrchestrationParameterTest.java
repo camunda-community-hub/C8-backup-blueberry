@@ -44,10 +44,10 @@ class OrchestrationParameterTest {
         // given by nobody
         assertNull(parameters.getParameterValue("backupCheckpointInterval"));
 
-        OrchestrationParameter.Parameter store = parameters.getParameters().stream()
+        Parameter store = parameters.getParameters().stream()
                 .filter(p -> p.getName().equals("container.containerType")).findFirst().orElseThrow();
-        assertEquals(OrchestrationParameter.Parameter.Origin.ACTUATOR, store.getOrigin());
-        assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, parameters.getParameters().stream()
+        assertEquals(Parameter.Origin.ACTUATOR, store.getOrigin());
+        assertEquals(Parameter.Origin.CONFIG, parameters.getParameters().stream()
                 .filter(p -> p.getName().equals("backupSchedule")).findFirst().orElseThrow().getOrigin());
         // one parameter for each variable searched
         assertEquals(OrchestrationParameter.ENVIRONMENT.size(), parameters.getParameters().size());
@@ -60,7 +60,7 @@ class OrchestrationParameterTest {
 
         assertEquals("gcs", parameters.getParameterValue("container.containerType"));
         assertEquals("P7D", parameters.getParameterValue(OrchestrationParameter.BACKUP_RETENTION_WINDOW));
-        parameters.getParameters().forEach(p -> assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, p.getOrigin()));
+        parameters.getParameters().forEach(p -> assertEquals(Parameter.Origin.CONFIG, p.getOrigin()));
     }
 
     @Test
@@ -83,3 +83,4 @@ class OrchestrationParameterTest {
         return TestOrchestration.build(Map.of(), env).getSecondaryStorageKind();
     }
 }
+

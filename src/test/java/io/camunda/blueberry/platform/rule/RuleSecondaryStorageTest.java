@@ -1,7 +1,7 @@
 package io.camunda.blueberry.platform.rule;
 
+import io.camunda.blueberry.connect.BackupComponentInt;
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.connect.OperationResult;
 import io.camunda.blueberry.connect.BackupInfo;
 import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
@@ -33,8 +33,8 @@ class RuleSecondaryStorageTest {
             return true;
         }
 
-        public CamundaApplicationInt.COMPONENT getComponent() {
-            return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
+        public BackupComponentInt.COMPONENT getComponent() {
+            return BackupComponentInt.COMPONENT.SECONDARYSTORAGE;
         }
 
         public BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
@@ -161,3 +161,4 @@ class RuleSecondaryStorageTest {
         assertFalse(configure.getListVerifications().isEmpty());
     }
 }
+

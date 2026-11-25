@@ -6,11 +6,7 @@ import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.client.CamundaClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -39,24 +35,15 @@ public class ZeebeRestApi {
 
     private final Logger logger = LoggerFactory.getLogger(ZeebeRestApi.class);
     private final BlueberryConfig blueberryConfig;
-    // Created at the first call (not with the bean)
-    private volatile RestTemplate restTemplate;
     private final CamundaClient camundaClient;
     // The response is read as a String and parsed here: it does not depend on the JSON converters of the RestTemplate
     private final ObjectMapper objectMapper = new ObjectMapper();
+    // Created at the first call (not with the bean)
+    private volatile RestTemplate restTemplate;
 
     public ZeebeRestApi(BlueberryConfig blueberryConfig, CamundaClient camundaClient) {
         this.blueberryConfig = blueberryConfig;
         this.camundaClient = camundaClient;
-    }
-
-    /**
-     * Answer of a REST call. A 4xx or 5xx answer is not an exception: the status and the body are given back.
-     */
-    public record RestResult(int status, String raw, JsonNode body) {
-        public boolean isSuccess() {
-            return status >= 200 && status < 300;
-        }
     }
 
     /**
@@ -90,25 +77,25 @@ public class ZeebeRestApi {
         return base.endsWith(API_PREFIX) ? base : base + API_PREFIX;
     }
 
-    /* ******************************************************************** */
-    /*  Exporting                                                           */
-    /* ******************************************************************** */
-
     public RestResult pauseExporting(boolean soft) {
         return call(HttpMethod.POST, "/exporting/pause" + (soft ? "?soft=true" : ""), null);
     }
+
+    /* ******************************************************************** */
+    /*  Exporting                                                           */
+    /* ******************************************************************** */
 
     public RestResult resumeExporting() {
         return call(HttpMethod.POST, "/exporting/resume", null);
     }
 
-    /* ******************************************************************** */
-    /*  Runtime backup (Zeebe)                                              */
-    /* ******************************************************************** */
-
     public RestResult takeRuntimeBackup(long backupId) {
         return call(HttpMethod.POST, "/backups/runtime", Map.of("backupId", backupId));
     }
+
+    /* ******************************************************************** */
+    /*  Runtime backup (Zeebe)                                              */
+    /* ******************************************************************** */
 
     public RestResult getRuntimeBackup(long backupId) {
         return call(HttpMethod.GET, "/backups/runtime/" + backupId, null);
@@ -118,13 +105,13 @@ public class ZeebeRestApi {
         return call(HttpMethod.GET, "/backups/runtime", null);
     }
 
-    /* ******************************************************************** */
-    /*  History backup (Operate, Tasklist data in Elasticsearch/OpenSearch) */
-    /* ******************************************************************** */
-
     public RestResult takeHistoryBackup(long backupId) {
         return call(HttpMethod.POST, "/backups/history", Map.of("backupId", backupId));
     }
+
+    /* ******************************************************************** */
+    /*  History backup (Operate, Tasklist data in Elasticsearch/OpenSearch) */
+    /* ******************************************************************** */
 
     public RestResult getHistoryBackup(long backupId) {
         return call(HttpMethod.GET, "/backups/history/" + backupId, null);
@@ -134,10 +121,6 @@ public class ZeebeRestApi {
         return call(HttpMethod.GET, "/backups/history", null);
     }
 
-    /* ******************************************************************** */
-    /*  Restore API (Camunda 8.10)                                          */
-    /* ******************************************************************** */
-
     /**
      * Change the mode of the cluster: RECOVERING (the brokers stop processing and wait for the restore) or PROCESSING.
      * PATCH /v2/mode?mode=RECOVERING answers with a changeId.
@@ -145,6 +128,10 @@ public class ZeebeRestApi {
     public RestResult changeMode(String mode) {
         return call(HttpMethod.PATCH, "/mode?mode=" + mode, null);
     }
+
+    /* ******************************************************************** */
+    /*  Restore API (Camunda 8.10)                                          */
+    /* ******************************************************************** */
 
     /**
      * Restore the cluster from the backups: POST /v2/restore {"backupIds": [...]} (202: accepted, with a changeId).
@@ -174,10 +161,6 @@ public class ZeebeRestApi {
         return callUrl(HttpMethod.GET, blueberryConfig.getZeebeActuatorUrl() + "/actuator/cluster", null);
     }
 
-    /* ******************************************************************** */
-    /*  Call                                                                */
-    /* ******************************************************************** */
-
     /**
      * Call the REST API
      *
@@ -188,6 +171,10 @@ public class ZeebeRestApi {
     public RestResult call(HttpMethod method, String path, Object body) {
         return callUrl(method, getBaseUrl() + path, body);
     }
+
+    /* ******************************************************************** */
+    /*  Call                                                                */
+    /* ******************************************************************** */
 
     /**
      * Call a complete url (the REST API, or the management actuator of Zeebe)
@@ -226,5 +213,14 @@ public class ZeebeRestApi {
             }
         }
         return new RestResult(status, raw, node);
+    }
+
+    /**
+     * Answer of a REST call. A 4xx or 5xx answer is not an exception: the status and the body are given back.
+     */
+    public record RestResult(int status, String raw, JsonNode body) {
+        public boolean isSuccess() {
+            return status >= 200 && status < 300;
+        }
     }
 }

@@ -28,6 +28,13 @@ public class ContainerFilesystem implements Container {
         this.orchestrationParameter = orchestrationParameter;
     }
 
+    /**
+     * The path is written in a JSON string
+     */
+    static String escape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     @Override
     public String getType() {
         return FILESYSTEM;
@@ -59,12 +66,5 @@ public class ContainerFilesystem implements Container {
                 ? "blueberry.orchestrationConfig.filesystem.path is not set: it is the directory of the repository, as Elasticsearch sees it "
                 + "(for example /usr/share/elasticsearch/backups/elasticsearch)"
                 : null;
-    }
-
-    /**
-     * The path is written in a JSON string
-     */
-    static String escape(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

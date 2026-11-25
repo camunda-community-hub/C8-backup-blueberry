@@ -16,7 +16,7 @@ public interface BackupComponentInt {
      */
     boolean isActive();
 
-    CamundaApplicationInt.COMPONENT getComponent();
+    COMPONENT getComponent();
 
     BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException;
 
@@ -25,6 +25,13 @@ public interface BackupComponentInt {
     List<BackupInfo> getListBackups() throws OperationException;
 
     String getUrlListBackup();
+
+    /**
+     * The components Blueberry backs up and restores. SECONDARYSTORAGE is the secondary storage of the cluster (Elasticsearch, OpenSearch,
+     * a database): its implementation is given by the SecondaryStorageFactory. Operate and Tasklist are no longer separate
+     * applications since 8.10: their data is in the secondary storage, backed up with Zeebe.
+     */
+    enum COMPONENT {OPTIMIZE, ZEEBE, SECONDARYSTORAGE}
 
     class BackupOperation {
         public List<String> listSnapshots = new ArrayList<>();

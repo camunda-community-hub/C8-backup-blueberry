@@ -1,11 +1,13 @@
 package io.camunda.blueberry.platform.rule;
 
 
-import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.BackupComponentInt;
+import io.camunda.blueberry.connect.OperationResult;
+import io.camunda.blueberry.connect.OptimizeConnect;
 import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.exception.CommunicationException;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -157,7 +159,7 @@ public class RuleOptimizeRepository implements Rule {
 
     public OrchestrationParameter.ResultParameter accessParameters() throws CommunicationException {
         try {
-            return orchestrationParameter.accessParameterViaActuator(CamundaApplicationInt.COMPONENT.OPTIMIZE, List.of(OPTIMIZE_REPOSITORY), blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env");
+            return orchestrationParameter.accessParameterViaActuator(BackupComponentInt.COMPONENT.OPTIMIZE, List.of(OPTIMIZE_REPOSITORY), blueberryConfig.getOptimizeActuatorUrl() + "/actuator/env");
         } catch (CommunicationException e) {
             OrchestrationParameter.ResultParameter resultParameter = new OrchestrationParameter.ResultParameter();
             resultParameter.accessActuator = false;
@@ -178,3 +180,4 @@ public class RuleOptimizeRepository implements Rule {
     }
 
 }
+

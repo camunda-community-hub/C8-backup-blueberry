@@ -31,7 +31,7 @@ class RuleOptimizePresentTest {
      * @param answers true: Optimize answers on its actuator (the cluster)
      */
     private static OptimizeConnect optimize(BlueberryConfig config, boolean answers) {
-        return new OptimizeConnect(config, new RestTemplate()) {
+        return new OptimizeConnect(config, new RestTemplate(), null) {
             @Override
             public boolean isConnected() {
                 return answers;

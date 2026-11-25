@@ -2,11 +2,7 @@ package io.camunda.blueberry.connect.secondary;
 
 import io.camunda.blueberry.exception.OperationException;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -25,14 +21,6 @@ import java.util.regex.Pattern;
  * Each snapshot is restored on its own, one after the other.
  */
 public final class ElasticsearchSnapshotPlan {
-
-    public enum Kind {WEBAPPS, OPTIMIZE, ZEEBE_RECORDS}
-
-    /**
-     * A snapshot to restore
-     */
-    public record Planned(Kind kind, String repository, String name, int part, int partCount) {
-    }
 
     private ElasticsearchSnapshotPlan() {
     }
@@ -134,5 +122,13 @@ public final class ElasticsearchSnapshotPlan {
 
     private static OperationException missing(String message) {
         return new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Snapshots not found", message);
+    }
+
+    public enum Kind {WEBAPPS, OPTIMIZE, ZEEBE_RECORDS}
+
+    /**
+     * A snapshot to restore
+     */
+    public record Planned(Kind kind, String repository, String name, int part, int partCount) {
     }
 }

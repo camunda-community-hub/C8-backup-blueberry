@@ -17,24 +17,11 @@ import java.util.function.Supplier;
  */
 public class RuleActuatorEndpoint implements Rule {
 
-    /**
-     * An endpoint to check.
-     * <ul>
-     *   <li>ACCESS: the endpoint answers a GET with a 2xx status</li>
-     *   <li>LINK: the endpoint is declared in the /actuator list. Used for endpoints that can't be called without side effect (exporting/pause)</li>
-     * </ul>
-     */
-    public enum CheckType {ACCESS, LINK}
-
-    public record EndpointCheck(String endpointId, CheckType type) {
-    }
-
     private final String componentName;
     private final Supplier<String> actuatorUrl;
     private final List<EndpointCheck> endpoints;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
     public RuleActuatorEndpoint(String componentName,
                                 Supplier<String> actuatorUrl,
                                 List<EndpointCheck> endpoints,
@@ -184,5 +171,17 @@ public class RuleActuatorEndpoint implements Rule {
         configuration.append("- name: management.endpoint.").append(endpointId).append(".access\n")
                 .append("  value: unrestricted");
         return configuration.toString();
+    }
+
+    /**
+     * An endpoint to check.
+     * <ul>
+     *   <li>ACCESS: the endpoint answers a GET with a 2xx status</li>
+     *   <li>LINK: the endpoint is declared in the /actuator list. Used for endpoints that can't be called without side effect (exporting/pause)</li>
+     * </ul>
+     */
+    public enum CheckType {ACCESS, LINK}
+
+    public record EndpointCheck(String endpointId, CheckType type) {
     }
 }

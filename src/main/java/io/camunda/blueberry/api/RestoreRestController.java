@@ -3,11 +3,10 @@ package io.camunda.blueberry.api;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
-import io.camunda.blueberry.operation.restoration.RestorationJob;
-import io.camunda.blueberry.operation.restoration.RestorationManager;
 import io.camunda.blueberry.operation.restoration.RestoreEnvironmentCheck;
+import io.camunda.blueberry.operation.restoration.RestoreJob;
+import io.camunda.blueberry.operation.restoration.RestoreManager;
 import io.camunda.blueberry.operation.restoration.RestorePreflight;
-import io.camunda.blueberry.platform.version.RestorePhase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
@@ -21,13 +20,13 @@ import java.util.stream.Collectors;
 @RequestMapping("blueberry")
 public class RestoreRestController {
 
-    private final RestorationManager restorationManager;
+    private final RestoreManager restoreManager;
     private final RestoreEnvironmentCheck restoreEnvironmentCheck;
     Logger logger = LoggerFactory.getLogger(RestoreRestController.class);
 
-    public RestoreRestController(RestorationManager restorationManager,
+    public RestoreRestController(RestoreManager restoreManager,
                                  RestoreEnvironmentCheck restoreEnvironmentCheck) {
-        this.restorationManager = restorationManager;
+        this.restoreManager = restoreManager;
         this.restoreEnvironmentCheck = restoreEnvironmentCheck;
     }
 
@@ -38,21 +37,22 @@ public class RestoreRestController {
 
     @GetMapping(value = "/api/restore/phases", produces = "application/json")
     public Map<String, Object> phases() {
-        List<Map<String, Object>> phaseMaps = restorationManager.phasesForActiveVersion().stream()
-                .map(this::phaseToMap)
+        // The steps of the restore are fixed: see RestoreJob
+        List<Map<String, Object>> phaseMaps = RestoreJob.STEPS.stream()
+                .map(step -> Map.<String, Object>of("id", step, "title", step, "kind", "AUTOMATED"))
                 .collect(Collectors.toList());
-        boolean restoreApi = phaseMaps.stream().anyMatch(phase -> "recovery_mode".equals(phase.get("id")));
         Map<String, Object> result = new HashMap<>();
         result.put("phases", phaseMaps);
-        result.put("executionEnabled", restorationManager.isLiveRestoreEnabled());
-        result.put("procedure", restoreApi ? "restore-api-8.10" : "manual");
+        result.put("executionEnabled", restoreManager.isLiveRestoreEnabled());
+        // Why the live restore can be off: the configuration (blueberry.restore.execution)
+        result.put("executionConfigured", restoreManager.isExecutionConfigured());
         return result;
     }
 
     @GetMapping(value = "/api/restore/preflight", produces = "application/json")
     public Map<String, Object> preflight(@RequestParam(name = "backupId") long backupId) {
         try {
-            return preflightToMap(restorationManager.preflight(backupId));
+            return preflightToMap(restoreManager.preflight(backupId));
         } catch (OperationException e) {
             return e.getRecord();
         }
@@ -66,8 +66,8 @@ public class RestoreRestController {
         }
         try {
             logger.info("Rest [/api/restore/start] backupId={}", backupId);
-            restorationManager.startRestoration(backupId);
-            RestorationJob job = restorationManager.getCurrentRestorationJob();
+            restoreManager.startRestoration(backupId);
+            RestoreJob job = restoreManager.getCurrentRestorationJob();
             Map<String, Object> result = new HashMap<>();
             result.put("statusOperation", job == null ? "STARTED" : job.getJobStatus().toString());
             result.put("backupId", backupId);
@@ -81,12 +81,12 @@ public class RestoreRestController {
     public MonitorStatus monitor(@RequestParam(name = "timezoneoffset") Long timezoneOffset) {
         MonitorStatus monitorStatus = new MonitorStatus();
         monitorStatus.statusRestore = "READY";
-        RestorationJob job = restorationManager.getCurrentRestorationJob();
+        RestoreJob job = restoreManager.getCurrentRestorationJob();
         if (job != null) {
             monitorStatus.statusRestore = job.getJobStatus().toString();
             monitorStatus.backupId = job.getBackupId();
-            monitorStatus.camundaMinorVersion = job.getProfile().minorVersion();
-            monitorStatus.docsRestoreUrl = job.getProfile().docsRestoreUrl();
+            monitorStatus.docsRestoreUrl = RestoreJob.RESTORE_DOC;
+            monitorStatus.consistent = job.isConsistent();
             OperationLog operationLog = job.getOperationLog();
             if (operationLog != null) {
                 monitorStatus.step = operationLog.getCurrentStep();
@@ -100,17 +100,6 @@ public class RestoreRestController {
         return monitorStatus;
     }
 
-    private Map<String, Object> phaseToMap(RestorePhase phase) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", phase.id());
-        map.put("title", phase.title());
-        map.put("kind", phase.kind().name());
-        if (phase.manualHint() != null) {
-            map.put("manualHint", phase.manualHint());
-        }
-        return map;
-    }
-
     private Map<String, Object> preflightToMap(RestorePreflight.Result result) {
         Map<String, Object> map = new HashMap<>();
         map.put("allowed", result.allowed());
@@ -120,7 +109,6 @@ public class RestoreRestController {
         map.put("missingComponents", result.missingComponents());
         map.put("backupStatus", result.backupStatus());
         map.put("message", result.message());
-        map.put("camundaMinorVersion", result.camundaMinorVersion());
         map.put("docsRestoreUrl", result.docsRestoreUrl());
         return map;
     }
@@ -141,7 +129,7 @@ public class RestoreRestController {
         @JsonProperty
         Long backupId;
         @JsonProperty
-        String camundaMinorVersion;
+        boolean consistent = true;
         @JsonProperty
         String docsRestoreUrl;
         @JsonProperty

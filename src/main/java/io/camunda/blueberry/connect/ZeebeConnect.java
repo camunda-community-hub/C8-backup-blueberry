@@ -3,11 +3,12 @@ package io.camunda.blueberry.connect;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.connect.toolbox.WebActuator;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import io.camunda.client.CamundaClient;
 import io.camunda.client.CamundaClientConfiguration;
 import io.camunda.client.api.response.Topology;
@@ -20,15 +21,8 @@ import org.springframework.web.client.RestTemplate;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.StreamSupport;
+import java.util.*;
 
 @Component
 public class ZeebeConnect extends WebActuator implements BackupComponentInt {
@@ -108,8 +102,8 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     }
 
     @Override
-    public CamundaApplicationInt.COMPONENT getComponent() {
-        return CamundaApplicationInt.COMPONENT.ZEEBE;
+    public BackupComponentInt.COMPONENT getComponent() {
+        return BackupComponentInt.COMPONENT.ZEEBE;
     }
 
     /**
@@ -117,16 +111,16 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
      *
      * @return connection information
      */
-    public CamundaApplicationInt.ConnectionInfo isConnectedInformation() {
-        return new CamundaApplicationInt.ConnectionInfo(isConnected(), "Grpc Connection[" + camundaClientConfiguration.getGrpcAddress() + "]");
+    public ConnectionInfo isConnectedInformation() {
+        return new ConnectionInfo(isConnected(), "Grpc Connection[" + camundaClientConfiguration.getGrpcAddress() + "]");
     }
 
     public boolean isConnectedActuator() {
-        return webActuator.isConnected(CamundaApplicationInt.COMPONENT.ZEEBE, blueberryConfig.getZeebeActuatorUrl() + "/actuator");
+        return webActuator.isConnected(BackupComponentInt.COMPONENT.ZEEBE, blueberryConfig.getZeebeActuatorUrl() + "/actuator");
     }
 
-    public CamundaApplicationInt.ConnectionInfo isConnectedActuatorInformation() {
-        return new CamundaApplicationInt.ConnectionInfo(isConnectedActuator(), "Actuator Connection[" + blueberryConfig.getZeebeActuatorUrl() + "]");
+    public ConnectionInfo isConnectedActuatorInformation() {
+        return new ConnectionInfo(isConnectedActuator(), "Actuator Connection[" + blueberryConfig.getZeebeActuatorUrl() + "]");
     }
 
     public boolean activateConnection() {
@@ -154,7 +148,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             clusterInformation.replicationFactor = topology.getReplicationFactor();
             clusterInformation.camundaVersion = topology.getGatewayVersion();
             // the parameter secondaryStorage: the actuator of Zeebe, else the configuration
-            OrchestrationParameter.Parameter secondaryStorage = orchestrationParameter.getParameter(OrchestrationParameter.SECONDARY_STORAGE);
+            Parameter secondaryStorage = orchestrationParameter.getParameter(OrchestrationParameter.SECONDARY_STORAGE);
             clusterInformation.secondaryStorage = orchestrationParameter.getParameterString(OrchestrationParameter.SECONDARY_STORAGE);
             clusterInformation.secondaryStorageSource = secondaryStorage == null ? "" : secondaryStorage.getOriginLabel();
 
@@ -199,7 +193,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
 
     public void pauseExporting(OperationLog operationLog) {
         ResponseEntity<String> pauseZeebeExporting = restTemplate.postForEntity(blueberryConfig.getZeebeActuatorUrl() + "/actuator/exporting/pause", new HashMap<>(), String.class);
-        operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBE, "Pause Zeebe exporting");
+        operationLog.info(BackupComponentInt.COMPONENT.ZEEBE, "Pause Zeebe exporting");
     }
     /* ******************************************************************** */
     /*                                                                      */
@@ -214,13 +208,13 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     public void softPauseExporting(Long backupId, OperationLog operationLog) throws BackupException {
         ZeebeRestApi.RestResult result = zeebeRestApi.pauseExporting(true);
         if (!result.isSuccess()) {
-            operationLog.error(CamundaApplicationInt.COMPONENT.ZEEBE, "Soft pause of the exporting failed: status " + result.status() + " " + result.raw());
-            throw new BackupException(CamundaApplicationInt.COMPONENT.ZEEBE, result.status() == 0 ? 500 : result.status(),
+            operationLog.error(BackupComponentInt.COMPONENT.ZEEBE, "Soft pause of the exporting failed: status " + result.status() + " " + result.raw());
+            throw new BackupException(BackupComponentInt.COMPONENT.ZEEBE, result.status() == 0 ? 500 : result.status(),
                     "Can't pause the Zeebe exporting",
                     "POST " + zeebeRestApi.getBaseUrl() + "/exporting/pause?soft=true answered " + result.status() + " " + result.raw(),
                     backupId);
         }
-        operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBE, "Zeebe exporting paused with success");
+        operationLog.info(BackupComponentInt.COMPONENT.ZEEBE, "Zeebe exporting paused with success");
     }
 
     /**
@@ -229,9 +223,9 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     public void resumeExporting(OperationLog operationLog) {
         ZeebeRestApi.RestResult result = zeebeRestApi.resumeExporting();
         if (result.isSuccess()) {
-            operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBE, "Resume Zeebe exporting");
+            operationLog.info(BackupComponentInt.COMPONENT.ZEEBE, "Resume Zeebe exporting");
         } else {
-            operationLog.error(CamundaApplicationInt.COMPONENT.ZEEBE, "Can't resume the Zeebe exporting: status " + result.status() + " " + result.raw()
+            operationLog.error(BackupComponentInt.COMPONENT.ZEEBE, "Can't resume the Zeebe exporting: status " + result.status() + " " + result.raw()
                     + ". Resume it manually: POST " + zeebeRestApi.getBaseUrl() + "/exporting/resume");
         }
     }
@@ -266,9 +260,9 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
 
 
     @Override
-    public CamundaApplicationInt.BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
+    public BackupComponentInt.BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
 
-        CamundaApplicationInt.BackupOperation backupOperation = new CamundaApplicationInt.BackupOperation();
+        BackupComponentInt.BackupOperation backupOperation = new BackupComponentInt.BackupOperation();
 
         // Runtime backup of the Zeebe brokers: REST API POST /v2/backups/runtime {"backupId": n} (202: scheduled)
         ZeebeRestApi.RestResult result = zeebeRestApi.takeRuntimeBackup(backupId);
@@ -277,7 +271,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
 
         if (result.isSuccess()) {
             logger.info("Backup {} successfully scheduled.", backupId);
-            operationLog.info(CamundaApplicationInt.COMPONENT.ZEEBE, "Zeebe runtime backup " + backupId + " scheduled");
+            operationLog.info(BackupComponentInt.COMPONENT.ZEEBE, "Zeebe runtime backup " + backupId + " scheduled");
         } else {
             logger.error("Backup {} failed with status {}: {}", backupId, result.status(), result.raw());
             backupOperation.title = "Zeebe backup refused (status " + result.status() + ")";
@@ -292,9 +286,9 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     /* ******************************************************************** */
 
     @Override
-    public CamundaApplicationInt.BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
+    public BackupComponentInt.BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
         ObjectMapper objectMapper = new ObjectMapper();
-        CamundaApplicationInt.BackupOperation backupOperation = new CamundaApplicationInt.BackupOperation();
+        BackupComponentInt.BackupOperation backupOperation = new BackupComponentInt.BackupOperation();
 
         int loopCount = 0;
         int timeToWait = 100;
@@ -339,7 +333,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
                     backupOperation.status = 500;
                     backupOperation.title = "Zeebe backup " + backupId + " is " + state;
                     backupOperation.message = result.body().path("failureReason").asText(result.raw());
-                    operationLog.error(CamundaApplicationInt.COMPONENT.ZEEBE, backupOperation.title + ": " + backupOperation.message);
+                    operationLog.error(BackupComponentInt.COMPONENT.ZEEBE, backupOperation.title + ": " + backupOperation.message);
                     break;
                 }
             }
@@ -369,7 +363,7 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
             for (JsonNode t : jsonArray) {
                 BackupInfo backupInfo = new BackupInfo();
                 backupInfo.backupId = t.path("backupId").asLong();
-                backupInfo.components.add(CamundaApplicationInt.COMPONENT.ZEEBE);
+                backupInfo.components.add(BackupComponentInt.COMPONENT.ZEEBE);
                 backupInfo.status = BackupInfo.fromZeebeStatus(t.path("state").asText());
                 // the date of the first partition which gives it
                 for (JsonNode detail : t.path("details")) {
@@ -501,3 +495,4 @@ public class ZeebeConnect extends WebActuator implements BackupComponentInt {
     }
 
 }
+

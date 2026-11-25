@@ -2,7 +2,6 @@ package io.camunda.blueberry.operation.backup;
 
 import io.camunda.blueberry.connect.BackupComponentInt;
 import io.camunda.blueberry.connect.BackupInfo;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
@@ -23,14 +22,14 @@ class BackupManagerPartialTest {
         info.backupId = 10;
         info.status = BackupInfo.Status.COMPLETED;
         info.components = new HashSet<>(Set.of(
-                CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE,
-                CamundaApplicationInt.COMPONENT.OPTIMIZE,
-                CamundaApplicationInt.COMPONENT.ZEEBE));
+                BackupComponentInt.COMPONENT.SECONDARYSTORAGE,
+                BackupComponentInt.COMPONENT.OPTIMIZE,
+                BackupComponentInt.COMPONENT.ZEEBE));
 
-        Set<CamundaApplicationInt.COMPONENT> required = EnumSet.of(
-                CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE,
-                CamundaApplicationInt.COMPONENT.OPTIMIZE,
-                CamundaApplicationInt.COMPONENT.ZEEBE);
+        Set<BackupComponentInt.COMPONENT> required = EnumSet.of(
+                BackupComponentInt.COMPONENT.SECONDARYSTORAGE,
+                BackupComponentInt.COMPONENT.OPTIMIZE,
+                BackupComponentInt.COMPONENT.ZEEBE);
 
         BackupCompleteness.Detail detail = BackupCompleteness.fromBackup(info, required);
 
@@ -44,11 +43,11 @@ class BackupManagerPartialTest {
         BackupInfo info = new BackupInfo();
         info.backupId = 11;
         info.status = BackupInfo.Status.COMPLETED;
-        info.components = new HashSet<>(Set.of(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE));
+        info.components = new HashSet<>(Set.of(BackupComponentInt.COMPONENT.SECONDARYSTORAGE));
 
-        Set<CamundaApplicationInt.COMPONENT> required = EnumSet.of(
-                CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE,
-                CamundaApplicationInt.COMPONENT.ZEEBE);
+        Set<BackupComponentInt.COMPONENT> required = EnumSet.of(
+                BackupComponentInt.COMPONENT.SECONDARYSTORAGE,
+                BackupComponentInt.COMPONENT.ZEEBE);
 
         BackupCompleteness.Detail detail = BackupCompleteness.fromBackup(info, required);
 
@@ -63,13 +62,13 @@ class BackupManagerPartialTest {
         info.backupId = 12;
         info.status = BackupInfo.Status.PARTIALBACKUP;
         info.components = new HashSet<>(Set.of(
-                CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE,
-                CamundaApplicationInt.COMPONENT.OPTIMIZE));
+                BackupComponentInt.COMPONENT.SECONDARYSTORAGE,
+                BackupComponentInt.COMPONENT.OPTIMIZE));
 
-        Set<CamundaApplicationInt.COMPONENT> required = EnumSet.of(
-                CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE,
-                CamundaApplicationInt.COMPONENT.OPTIMIZE,
-                CamundaApplicationInt.COMPONENT.ZEEBE);
+        Set<BackupComponentInt.COMPONENT> required = EnumSet.of(
+                BackupComponentInt.COMPONENT.SECONDARYSTORAGE,
+                BackupComponentInt.COMPONENT.OPTIMIZE,
+                BackupComponentInt.COMPONENT.ZEEBE);
 
         BackupCompleteness.Detail detail = BackupCompleteness.fromBackup(info, required);
 
@@ -80,18 +79,18 @@ class BackupManagerPartialTest {
     @Test
     void requiredSetOmitsInactiveOptimize() {
         List<BackupComponentInt> components = List.of(
-                stub(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, true),
-                stub(CamundaApplicationInt.COMPONENT.OPTIMIZE, false),
-                stub(CamundaApplicationInt.COMPONENT.ZEEBE, true));
+                stub(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, true),
+                stub(BackupComponentInt.COMPONENT.OPTIMIZE, false),
+                stub(BackupComponentInt.COMPONENT.ZEEBE, true));
 
-        Set<CamundaApplicationInt.COMPONENT> required = BackupCompleteness.requiredActiveComponents(components);
+        Set<BackupComponentInt.COMPONENT> required = BackupCompleteness.requiredActiveComponents(components);
 
-        assertFalse(required.contains(CamundaApplicationInt.COMPONENT.OPTIMIZE));
-        assertEquals(EnumSet.of(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, CamundaApplicationInt.COMPONENT.ZEEBE),
+        assertFalse(required.contains(BackupComponentInt.COMPONENT.OPTIMIZE));
+        assertEquals(EnumSet.of(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, BackupComponentInt.COMPONENT.ZEEBE),
                 required);
     }
 
-    private static BackupComponentInt stub(CamundaApplicationInt.COMPONENT component, boolean active) {
+    private static BackupComponentInt stub(BackupComponentInt.COMPONENT component, boolean active) {
         return new BackupComponentInt() {
             @Override
             public boolean isActive() {
@@ -99,7 +98,7 @@ class BackupManagerPartialTest {
             }
 
             @Override
-            public CamundaApplicationInt.COMPONENT getComponent() {
+            public BackupComponentInt.COMPONENT getComponent() {
                 return component;
             }
 
@@ -125,3 +124,4 @@ class BackupManagerPartialTest {
         };
     }
 }
+

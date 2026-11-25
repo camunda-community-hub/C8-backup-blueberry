@@ -1,7 +1,7 @@
 package io.camunda.blueberry.operation.backup;
 
+import io.camunda.blueberry.connect.BackupComponentInt;
 import io.camunda.blueberry.connect.BackupInfo;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,16 +17,7 @@ public final class BackupCompleteness {
     private BackupCompleteness() {
     }
 
-    public record Detail(
-            long backupId,
-            boolean complete,
-            List<String> presentComponents,
-            List<String> missingComponents,
-            String backupStatus
-    ) {
-    }
-
-    public static Set<CamundaApplicationInt.COMPONENT> requiredActiveComponents(
+    public static Set<BackupComponentInt.COMPONENT> requiredActiveComponents(
             List<io.camunda.blueberry.connect.BackupComponentInt> components) {
         return components.stream()
                 .filter(io.camunda.blueberry.connect.BackupComponentInt::isActive)
@@ -34,7 +25,7 @@ public final class BackupCompleteness {
                 .collect(Collectors.toSet());
     }
 
-    public static Detail fromBackup(BackupInfo backupInfo, Set<CamundaApplicationInt.COMPONENT> required) {
+    public static Detail fromBackup(BackupInfo backupInfo, Set<BackupComponentInt.COMPONENT> required) {
         List<String> present = backupInfo.components.stream()
                 .sorted(Comparator.comparing(Enum::name))
                 .map(Enum::name)
@@ -52,9 +43,19 @@ public final class BackupCompleteness {
         return new Detail(backupInfo.backupId, complete, present, missing, status);
     }
 
-    public static List<Detail> fromList(List<BackupInfo> backups, Set<CamundaApplicationInt.COMPONENT> required) {
+    public static List<Detail> fromList(List<BackupInfo> backups, Set<BackupComponentInt.COMPONENT> required) {
         return backups.stream()
                 .map(b -> fromBackup(b, required))
                 .toList();
     }
+
+    public record Detail(
+            long backupId,
+            boolean complete,
+            List<String> presentComponents,
+            List<String> missingComponents,
+            String backupStatus
+    ) {
+    }
 }
+

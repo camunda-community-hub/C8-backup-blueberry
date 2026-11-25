@@ -12,6 +12,15 @@ import java.util.List;
 public interface SecondaryStorageInt extends BackupComponentInt {
 
     /**
+     * Check that the storage answers. Does not change anything.
+     *
+     * @return CONNECTED, NOT_CONNECTED, or NO_IMPLEMENTATION when the storage can't be checked
+     */
+    default PingStatus ping() {
+        return PingStatus.NO_IMPLEMENTATION;
+    }
+
+    /**
      * Name of the storage, used by the configuration (blueberry.secondaryStorage) and by the factory
      */
     String getName();
@@ -55,5 +64,12 @@ public interface SecondaryStorageInt extends BackupComponentInt {
     default void restore(long backupId, OperationLog operationLog) throws OperationException {
         throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Restore not available",
                 "Blueberry can't restore the secondary storage [" + getName() + "]");
+    }
+
+    /**
+     * Result of {@link #ping()}
+     */
+    enum PingStatus {
+        CONNECTED, NOT_CONNECTED, NO_IMPLEMENTATION
     }
 }

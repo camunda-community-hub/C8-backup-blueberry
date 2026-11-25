@@ -42,6 +42,25 @@ public class ConfigurationRestController {
     }
 
     /**
+     * The list of the rules, without any check: the page displays it at once, then replaces it with the result of the check.
+     * Same structure as {@link #check()}, with the name of the rule (and its explanations, which do not need a check): the status,
+     * the details, the errors and the verifications are empty. The order is the one of the check, always the same.
+     */
+    @GetMapping(value = "/api/configuration/rules", produces = "application/json")
+    public List<Map<String, Object>> rules() {
+        return platformManager.getOrderedRules().stream()
+                .map(rule -> Map.of("name", rule.getName(),
+                        "valid", true,
+                        "status", "",
+                        "details", "",
+                        "errors", "",
+                        "explanations", rule.getExplanations() == null ? "" : rule.getExplanations(),
+                        "urldocumentation", rule.getUrlDocumentation() == null ? List.of() : rule.getUrlDocumentation(),
+                        "verifications", List.of()))
+                .toList();
+    }
+
+    /**
      * Check the system
      * Does Zeebe declare a container? A Type storage?
      * Does Elasticsearch as repository for each component for Optimize?
@@ -107,8 +126,8 @@ public class ConfigurationRestController {
                                         .stream()
                                         .map(tuple -> {
                                             return Map.of(
-                                                    "action", tuple.action()==null? "": tuple.action(),
-                                                    "activity", tuple.activity()==null? "": tuple.activity(),
+                                                    "action", tuple.action() == null ? "" : tuple.action(),
+                                                    "activity", tuple.activity() == null ? "" : tuple.activity(),
                                                     "actionStatus", tuple.actionStatus().toString(),
                                                     "command", tuple.command() == null ? "" : tuple.command(),
                                                     "error", tuple.error() == null ? "" : tuple.error(),

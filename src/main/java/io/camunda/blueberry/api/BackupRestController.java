@@ -9,13 +9,11 @@ import io.camunda.blueberry.operation.backup.BackupCompleteness;
 import io.camunda.blueberry.operation.backup.BackupJob;
 import io.camunda.blueberry.operation.backup.BackupManager;
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
-import io.camunda.blueberry.platform.version.CamundaVersionService;
-import io.camunda.blueberry.platform.version.RestorePhase;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,17 +25,39 @@ public class BackupRestController {
 
     private final ZeebeConnect zeebeConnect;
     private final BackupManager backupManager;
-    private final CamundaVersionService versionService;
     private final OrchestrationParameter orchestrationParameter;
     Logger logger = LoggerFactory.getLogger(BackupRestController.class);
 
     public BackupRestController(ZeebeConnect zeebeConnect, BackupManager backupManager,
-                                CamundaVersionService versionService,
                                 OrchestrationParameter orchestrationParameter) {
         this.zeebeConnect = zeebeConnect;
         this.backupManager = backupManager;
-        this.versionService = versionService;
         this.orchestrationParameter = orchestrationParameter;
+    }
+
+    private static Map<String, Object> toBackupMap(BackupInfo obj, Long timezoneOffset, BackupJob backupJob) {
+        Map<String, Object> mapRecord = new HashMap<>();
+        mapRecord.put("backupId", obj.backupId);
+        mapRecord.put("backupName", obj.backupName);
+        mapRecord.put("components", obj.components.stream()
+                .map(Object::toString)
+                .collect(Collectors.toList()));
+        mapRecord.put("backupTimeUTC", obj.backupTime);
+        mapRecord.put("backupTimeOffset", obj.backupTime.minusMinutes(timezoneOffset));
+        mapRecord.put("backupTime", DateOperation.dateTimeToHumanString(obj.backupTime, timezoneOffset));
+
+        mapRecord.put("backupStatus", obj.status == null ? "" : obj.status.toString());
+        if (backupJob != null && obj.backupId == backupJob.getBackupId()
+                && BackupJob.JOBSTATUS.INPROGRESS.equals(backupJob.getJobStatus())) {
+            mapRecord.put("backupStatus", BackupJob.JOBSTATUS.INPROGRESS.toString());
+        }
+        return mapRecord;
+    }
+
+    private static void applyCompleteness(Map<String, Object> mapRecord, BackupCompleteness.Detail detail) {
+        mapRecord.put("complete", detail.complete());
+        mapRecord.put("presentComponents", detail.presentComponents());
+        mapRecord.put("missingComponents", detail.missingComponents());
     }
 
     /**
@@ -54,8 +74,8 @@ public class BackupRestController {
         // the cluster is read now
         orchestrationParameter.refresh();
 
-        Map<String, OrchestrationParameter.Parameter> parameters = orchestrationParameter.getParameters().stream()
-                .collect(Collectors.toMap(OrchestrationParameter.Parameter::getName, p -> p));
+        Map<String, Parameter> parameters = orchestrationParameter.getParameters().stream()
+                .collect(Collectors.toMap(Parameter::getName, p -> p));
 
         Map<String, Object> result = new HashMap<>();
         result.put("mode", orchestrationParameter.getBackupMode());
@@ -69,33 +89,21 @@ public class BackupRestController {
         return result;
     }
 
-    private String originOf(OrchestrationParameter.Parameter parameter) {
+    private String originOf(Parameter parameter) {
         return parameter == null || parameter.getValue() == null ? "" : parameter.getOrigin().name();
     }
 
     @GetMapping(value = "/api/backup/phases", produces = "application/json")
     public Map<String, Object> phases() {
-        List<Map<String, Object>> phaseMaps = versionService.getActiveProfile().backupPhases().stream()
-                .map(this::phaseToMap)
+        // The steps of the backup are fixed: see BackupJob
+        List<Map<String, Object>> phaseMaps = BackupJob.STEPS.stream()
+                .map(step -> Map.<String, Object>of("id", step, "title", step, "kind", "AUTOMATED"))
                 .collect(Collectors.toList());
         Map<String, Object> result = new HashMap<>();
         result.put("phases", phaseMaps);
-        result.put("docsBackupUrl", versionService.getActiveProfile().docsBackupUrl());
-        result.put("camundaMinorVersion", versionService.getActiveProfile().minorVersion());
+        result.put("docsBackupUrl", BackupJob.BACKUP_DOC);
         return result;
     }
-
-    private Map<String, Object> phaseToMap(RestorePhase phase) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", phase.id());
-        map.put("title", phase.title());
-        map.put("kind", phase.kind().name());
-        if (phase.manualHint() != null) {
-            map.put("manualHint", phase.manualHint());
-        }
-        return map;
-    }
-
 
     @PostMapping(value = "/api/backup/start", produces = "application/json")
     public Map<String, Object> startBackup(@RequestBody BackupManager.BackupParameter backupParameter) {
@@ -141,7 +149,6 @@ public class BackupRestController {
         monitorStatus.dateStatus = DateOperation.dateTimeToHumanString(DateOperation.getLocalDateTimeNow(), timezoneOffset);
         return monitorStatus;
     }
-
 
     /**
      * Return the list of existing Backup
@@ -197,6 +204,7 @@ public class BackupRestController {
 
             result.put("errorMessage", listBackupResult.listErrors.stream()
                     .map(OperationException::getMessage)
+                    .distinct()
                     .collect(Collectors.joining(";")));
             result.put("error", listBackupResult.listErrors.stream()
                     .map(OperationException::getError)
@@ -235,31 +243,6 @@ public class BackupRestController {
         }
     }
 
-    private static Map<String, Object> toBackupMap(BackupInfo obj, Long timezoneOffset, BackupJob backupJob) {
-        Map<String, Object> mapRecord = new HashMap<>();
-        mapRecord.put("backupId", obj.backupId);
-        mapRecord.put("backupName", obj.backupName);
-        mapRecord.put("components", obj.components.stream()
-                .map(Object::toString)
-                .collect(Collectors.toList()));
-        mapRecord.put("backupTimeUTC", obj.backupTime);
-        mapRecord.put("backupTimeOffset", obj.backupTime.minusMinutes(timezoneOffset));
-        mapRecord.put("backupTime", DateOperation.dateTimeToHumanString(obj.backupTime, timezoneOffset));
-
-        mapRecord.put("backupStatus", obj.status == null ? "" : obj.status.toString());
-        if (backupJob != null && obj.backupId == backupJob.getBackupId()
-                && BackupJob.JOBSTATUS.INPROGRESS.equals(backupJob.getJobStatus())) {
-            mapRecord.put("backupStatus", BackupJob.JOBSTATUS.INPROGRESS.toString());
-        }
-        return mapRecord;
-    }
-
-    private static void applyCompleteness(Map<String, Object> mapRecord, BackupCompleteness.Detail detail) {
-        mapRecord.put("complete", detail.complete());
-        mapRecord.put("presentComponents", detail.presentComponents());
-        mapRecord.put("missingComponents", detail.missingComponents());
-    }
-
     private class MonitorStatus {
         @JsonProperty
         String statusBackup;
@@ -280,3 +263,4 @@ public class BackupRestController {
         List<OperationLog.Message> messages;
     }
 }
+

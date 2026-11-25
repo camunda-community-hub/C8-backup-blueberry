@@ -2,14 +2,22 @@ package io.camunda.blueberry.api;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.BackupInfo;
+import io.camunda.blueberry.connect.ConnectionInfo;
+import io.camunda.blueberry.connect.OptimizeConnect;
+import io.camunda.blueberry.connect.ZeebeConnect;
+import io.camunda.blueberry.connect.cluster.ClusterConnect;
+import io.camunda.blueberry.connect.cluster.ClusterFactory;
 import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
-import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
+import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.exception.OperationException;
+import io.camunda.blueberry.operation.OperationLog;
 import io.camunda.blueberry.operation.backup.BackupCompleteness;
 import io.camunda.blueberry.operation.backup.BackupJob;
 import io.camunda.blueberry.operation.backup.BackupManager;
 import io.camunda.blueberry.platform.ExplorationCluster;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.platform.rule.Rule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,6 +50,9 @@ public class DashboardRestController {
     private final ElasticSearchConnect elasticSearchConnect;
     private final OptimizeConnect optimizeConnect;
     private final BlueberryConfig blueberryConfig;
+    private final SecondaryStorageFactory secondaryStorageFactory;
+    private final ClusterFactory clusterFactory;
+    private final OrchestrationParameter orchestrationParameter;
 
     Logger logger = LoggerFactory.getLogger(DashboardRestController.class);
 
@@ -50,7 +61,13 @@ public class DashboardRestController {
                                    ZeebeConnect zeebeConnect,
                                    ElasticSearchConnect elasticSearchConnect,
                                    OptimizeConnect optimizeConnect,
-                                   BlueberryConfig blueberryConfig) {
+                                   BlueberryConfig blueberryConfig,
+                                   SecondaryStorageFactory secondaryStorageFactory,
+                                   OrchestrationParameter orchestrationParameter,
+                                   ClusterFactory clusterFactory) {
+        this.clusterFactory = clusterFactory;
+        this.orchestrationParameter = orchestrationParameter;
+        this.secondaryStorageFactory = secondaryStorageFactory;
         this.explorationCluster = explorationCluster;
         this.backupManager = backupManager;
         this.zeebeConnect = zeebeConnect;
@@ -124,7 +141,13 @@ public class DashboardRestController {
 
             Rule.RuleStatus ruleStatus = explorationCluster.rulesOk();
             status.configuration.statusConfiguration = ruleStatus == null ? "" : ruleStatus.toString();
-            status.configuration.elasticsearch = blueberryConfig.isElasticsearchEnabled() ? "enabled" : "disabled";
+            // The Elasticsearch of this card is the one of Optimize: same rule as Optimize
+            boolean optimizeActive = optimizeConnect.isActive();
+            status.configuration.elasticsearch = optimizeActive ? "enabled" : "disabled";
+            status.configuration.secondaryStorage = secondaryStorageFactory.getValueString();
+            status.configuration.cluster = clusterFactory.getName();
+            status.configuration.backupMode = orchestrationParameter.getBackupMode();
+            status.configuration.backupRetention = orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_RETENTION_WINDOW);
             status.configuration.optimize = optimizeConnect.isActive() ? "enabled" : "disabled";
 
             return status;
@@ -143,6 +166,8 @@ public class DashboardRestController {
                     "zeebe", toMap(zeebeConnect.isConnectedInformation()),
                     "zeebeActuator", toMap(zeebeConnect.isConnectedActuatorInformation()),
                     "elasticsearch", toMap(elasticSearchConnect.isConnectedInformation()),
+                    "secondaryStorage", pingSecondaryStorage(),
+                    "cluster", pingCluster(),
                     "optimize", toMap(optimizeConnect.isConnectedInformation()),
                     "zeebeVersion", zeebeConnect.getZeebeVersion()
             );
@@ -156,7 +181,31 @@ public class DashboardRestController {
         }
     }
 
-    private Map<String, Object> toMap(CamundaApplicationInt.ConnectionInfo connectionInfo) {
+    /**
+     * CONNECTED, NOT_CONNECTED or NO_IMPLEMENTATION (no storage known, or no ping for it)
+     */
+    private Map<String, Object> pingSecondaryStorage() {
+        SecondaryStorageInt storage = secondaryStorageFactory.getSecondaryStorage();
+        SecondaryStorageInt.PingStatus ping = storage == null ? SecondaryStorageInt.PingStatus.NO_IMPLEMENTATION : storage.ping();
+        String name = secondaryStorageFactory.getValueString();
+        return Map.of("connection", ping.name(),
+                "explanation", storage == null ? "No implementation for the secondary storage [" + name + "]" : "Secondary storage [" + storage.getName() + "]");
+    }
+
+    /**
+     * The cluster of blueberry.cluster.type (kubernetes, docker): READY if its ping() works
+     */
+    private Map<String, Object> pingCluster() {
+        ClusterConnect cluster = clusterFactory.getCluster();
+        if (cluster == null) {
+            return Map.of("connection", COMPONENT_NOT_CONNECTED,
+                    "explanation", "Unknown cluster type [" + clusterFactory.getConfiguredType() + "]. Supported: " + String.join(", ", clusterFactory.getSupportedNames()));
+        }
+        return Map.of("connection", cluster.ping() ? COMPONENT_READY : COMPONENT_NOT_CONNECTED,
+                "explanation", "Cluster [" + cluster.getName() + "]");
+    }
+
+    private Map<String, Object> toMap(ConnectionInfo connectionInfo) {
         return Map.of("connection", connectionInfo.isConnected ? COMPONENT_READY : COMPONENT_NOT_CONNECTED,
                 "explanation", connectionInfo.explanations);
     }
@@ -188,7 +237,9 @@ public class DashboardRestController {
     private class DashBackupInfo {
         @JsonProperty
         List<Map<String, Object>> history = new ArrayList<>();
-        /** All the backups, oldest first: the backup time line (one box per backup, per day) */
+        /**
+         * All the backups, oldest first: the backup time line (one box per backup, per day)
+         */
         @JsonProperty
         List<Map<String, Object>> timeline = new ArrayList<>();
         @JsonProperty
@@ -227,6 +278,18 @@ public class DashboardRestController {
 
         @JsonProperty
         String elasticsearch; // "enabled" or "disabled", from blueberry.elasticsearch.enabled
+
+        @JsonProperty
+        String backupRetention; // retention window of the backups (continuous mode), empty if the cluster does not say
+
+        @JsonProperty
+        String cluster; // kubernetes or docker (blueberry.cluster.type)
+
+        @JsonProperty
+        String backupMode; // CONTINUOUS, MANUAL, empty if the cluster does not say
+
+        @JsonProperty
+        String secondaryStorage; // the secondary storage of the cluster, empty if unknown
 
         @JsonProperty
         String optimize; // "enabled" or "disabled", from blueberry.optimize.enabled

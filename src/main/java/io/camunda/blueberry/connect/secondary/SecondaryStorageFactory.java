@@ -1,6 +1,7 @@
 package io.camunda.blueberry.connect.secondary;
 
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -22,12 +23,19 @@ public class SecondaryStorageFactory {
         this.orchestrationParameter = orchestrationParameter;
     }
 
+    static String normalize(String name) {
+        if (name == null) {
+            return "";
+        }
+        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
+    }
+
     /**
      * The secondary storage of the cluster: the parameter secondaryStorage (the actuator of Zeebe, else the configuration)
      *
      * @return the parameter: its value (null if unknown) and its origin
      */
-    public OrchestrationParameter.Parameter getValue() {
+    public Parameter getValue() {
         return orchestrationParameter.getParameter(OrchestrationParameter.SECONDARY_STORAGE);
     }
 
@@ -68,11 +76,5 @@ public class SecondaryStorageFactory {
     public List<String> getSupportedNames() {
         return secondaryStorageList.stream().map(SecondaryStorageInt::getName).toList();
     }
-
-    static String normalize(String name) {
-        if (name == null) {
-            return "";
-        }
-        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
-    }
 }
+

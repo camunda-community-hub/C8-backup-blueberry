@@ -3,7 +3,7 @@ package io.camunda.blueberry.platform.componentconfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.BackupComponentInt;
 import io.camunda.blueberry.exception.CommunicationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,29 +40,59 @@ import java.util.Map;
 @Component
 public class AccessActuator {
     public static final String MASKED_VALUE = "******";
-
-    /**
-     * What /actuator/env gave
-     *
-     * @param reachable /actuator/env answered
-     * @param masked    the endpoint answered, but it hides at least one of the values asked (******)
-     * @param values    the values found, by the key of the request
-     * @param note      why something is missing: not exposed, hidden, not defined. Empty if everything was found
-     */
-    public record Result(boolean reachable, boolean masked, Map<String, String> values, String note) {
-    }
-
     private final Logger logger = LoggerFactory.getLogger(AccessActuator.class);
     private final BlueberryConfig blueberryConfig;
     private final RestTemplate restTemplate;
-
     public AccessActuator(BlueberryConfig blueberryConfig, RestTemplate restTemplate) {
         this.blueberryConfig = blueberryConfig;
         this.restTemplate = restTemplate;
     }
 
-    protected Map<String, Object> accessActuator(CamundaApplicationInt.COMPONENT component,
-                                              String actuatorUrl) throws CommunicationException {
+    /**
+     * @param body   the answer of /actuator/env: {"propertySources": [{"name": ..., "properties": {"NAME": {"value": ...}}}]}
+     * @param wanted for each key, the names to search
+     */
+    static Result parse(String body, Map<String, List<String>> wanted) {
+        Map<String, String> values = new LinkedHashMap<>();
+        boolean masked = false;
+        try {
+            JsonNode propertySources = new ObjectMapper().readTree(body == null ? "{}" : body).path("propertySources");
+            for (Map.Entry<String, List<String>> request : wanted.entrySet()) {
+                // The property sources are listed by priority (the environment variables before the configuration files):
+                // the first source which defines one of the names gives the value. Searching name by name would give the
+                // value of a configuration file even when an environment variable overrides it.
+                search:
+                for (JsonNode propertySource : propertySources) {
+                    for (String name : request.getValue()) {
+                        JsonNode property = propertySource.path("properties").path(name);
+                        if (property.isMissingNode()) {
+                            continue;
+                        }
+                        String value = property.path("value").asText("");
+                        if (MASKED_VALUE.equals(value)) {
+                            // hidden at the highest priority: a value of a lower source would not be the effective one
+                            masked = true;
+                            break search;
+                        }
+                        if (!value.isEmpty()) {
+                            values.put(request.getKey(), value.trim());
+                            break search;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            return new Result(true, false, Map.of(), "The answer of /actuator/env is not JSON: " + e.getMessage());
+        }
+        String note = "";
+        if (masked && values.size() < wanted.size()) {
+            note = "Zeebe hides the values of its environment (******): set MANAGEMENT_ENDPOINT_ENV_SHOWVALUES=ALWAYS.";
+        }
+        return new Result(true, masked, values, note);
+    }
+
+    protected Map<String, Object> accessActuator(BackupComponentInt.COMPONENT component,
+                                                 String actuatorUrl) throws CommunicationException {
         RestTemplate plainRestTemplate = new RestTemplate();
         logger.info("Access actuator url [{}]", actuatorUrl);
 
@@ -120,45 +150,14 @@ public class AccessActuator {
     }
 
     /**
-     * @param body   the answer of /actuator/env: {"propertySources": [{"name": ..., "properties": {"NAME": {"value": ...}}}]}
-     * @param wanted for each key, the names to search
+     * What /actuator/env gave
+     *
+     * @param reachable /actuator/env answered
+     * @param masked    the endpoint answered, but it hides at least one of the values asked (******)
+     * @param values    the values found, by the key of the request
+     * @param note      why something is missing: not exposed, hidden, not defined. Empty if everything was found
      */
-    static Result parse(String body, Map<String, List<String>> wanted) {
-        Map<String, String> values = new LinkedHashMap<>();
-        boolean masked = false;
-        try {
-            JsonNode propertySources = new ObjectMapper().readTree(body == null ? "{}" : body).path("propertySources");
-            for (Map.Entry<String, List<String>> request : wanted.entrySet()) {
-                // The property sources are listed by priority (the environment variables before the configuration files):
-                // the first source which defines one of the names gives the value. Searching name by name would give the
-                // value of a configuration file even when an environment variable overrides it.
-                search:
-                for (JsonNode propertySource : propertySources) {
-                    for (String name : request.getValue()) {
-                        JsonNode property = propertySource.path("properties").path(name);
-                        if (property.isMissingNode()) {
-                            continue;
-                        }
-                        String value = property.path("value").asText("");
-                        if (MASKED_VALUE.equals(value)) {
-                            // hidden at the highest priority: a value of a lower source would not be the effective one
-                            masked = true;
-                            break search;
-                        }
-                        if (!value.isEmpty()) {
-                            values.put(request.getKey(), value.trim());
-                            break search;
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            return new Result(true, false, Map.of(), "The answer of /actuator/env is not JSON: " + e.getMessage());
-        }
-        String note = "";
-        if (masked && values.size() < wanted.size()) {
-            note = "Zeebe hides the values of its environment (******): set MANAGEMENT_ENDPOINT_ENV_SHOWVALUES=ALWAYS.";
-        }
-        return new Result(true, masked, values, note);
+    public record Result(boolean reachable, boolean masked, Map<String, String> values, String note) {
     }
 }
+

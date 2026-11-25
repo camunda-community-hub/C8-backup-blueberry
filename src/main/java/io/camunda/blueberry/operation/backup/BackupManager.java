@@ -1,10 +1,12 @@
 package io.camunda.blueberry.operation.backup;
 
 
-import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.BackupComponentInt;
+import io.camunda.blueberry.connect.BackupInfo;
+import io.camunda.blueberry.connect.OptimizeConnect;
+import io.camunda.blueberry.connect.ZeebeConnect;
 import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
-import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
@@ -23,14 +25,13 @@ import java.util.*;
  */
 @Component
 public class BackupManager {
-    private final SecondaryStorageFactory secondaryStorageFactory;
-    Logger logger = LoggerFactory.getLogger(BackupManager.class);
     final OptimizeConnect optimizeConnect;
     final ZeebeConnect zeebeConnect;
     final ElasticSearchConnect elasticSearchConnect;
-    private BackupJob backupJob;
-
+    private final SecondaryStorageFactory secondaryStorageFactory;
+    Logger logger = LoggerFactory.getLogger(BackupManager.class);
     List<BackupComponentInt> listBackupComponents;
+    private BackupJob backupJob;
 
     public BackupManager(OptimizeConnect optimizeConnect,
                          ZeebeConnect zeebeConnect, SecondaryStorageFactory secondaryStorageFactory,
@@ -48,7 +49,7 @@ public class BackupManager {
             throw new BackupException(null, 400, "Job Already in progress", "In Progress[" + backupJob.getBackupId() + "]", backupJob.getBackupId());
         // start a backup, asynchronously
         backupJob = new BackupJob(optimizeConnect, zeebeConnect, secondaryStorageFactory, elasticSearchConnect, new OperationLog());
-        Long backupId=null;
+        Long backupId = null;
         BACKUPIDPOLICY backupPolicy = backupParameter.getBackupPolicy();
         switch (backupPolicy) {
             case BACKUPIDPOLICY.NEXTID:
@@ -109,13 +110,6 @@ public class BackupManager {
         return backupJob;
     }
 
-    public class ListBackupResult{
-        public List<BackupInfo> listBackups = new ArrayList<>();
-        public List<OperationException> listErrors = new ArrayList<>();
-        public Map<String,String> listUrls = new HashMap<>();
-    }
-
-
     /**
      * Return the list of backup
      * All components are asking its backup, to establish a complete list
@@ -131,7 +125,7 @@ public class BackupManager {
             }
             try {
                 mergeListBackups(listBackupResult.listBackups, backupComponent.getListBackups());
-                listBackupResult.listUrls.put(backupComponent.getComponent().name(),backupComponent.getUrlListBackup());
+                listBackupResult.listUrls.put(backupComponent.getComponent().name(), backupComponent.getUrlListBackup());
             } catch (OperationException e) {
                 logger.error("Zeebe Error when accessing the list of Backups: {}", e);
                 listBackupResult.listErrors.add(e);
@@ -187,7 +181,8 @@ public class BackupManager {
 
     }
 
-    public enum BACKUPIDPOLICY { EXPLICIT, NEXTID, TIMEBACKUP}
+    public enum BACKUPIDPOLICY {EXPLICIT, NEXTID, TIMEBACKUP}
+
     public static class BackupParameter {
 
         /**
@@ -195,14 +190,21 @@ public class BackupManager {
          */
         public Boolean nextId;
         public BACKUPIDPOLICY backupPolicy;
+        public Long backupId;
+
         public BACKUPIDPOLICY getBackupPolicy() {
-            if (backupPolicy==null && nextId!=null)
+            if (backupPolicy == null && nextId != null)
                 return BACKUPIDPOLICY.NEXTID;
-            if (backupPolicy==null)
+            if (backupPolicy == null)
                 return BACKUPIDPOLICY.TIMEBACKUP;
             return backupPolicy;
 
         }
-        public Long backupId;
+    }
+
+    public class ListBackupResult {
+        public List<BackupInfo> listBackups = new ArrayList<>();
+        public List<OperationException> listErrors = new ArrayList<>();
+        public Map<String, String> listUrls = new HashMap<>();
     }
 }

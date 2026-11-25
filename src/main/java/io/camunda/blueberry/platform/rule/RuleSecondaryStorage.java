@@ -6,6 +6,7 @@ import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -62,8 +63,8 @@ public class RuleSecondaryStorage implements Rule {
 
     private RuleInfo operation(boolean execute) {
         RuleInfo ruleInfo = new RuleInfo(this);
-        OrchestrationParameter.Parameter parameter = secondaryStorageFactory.getValue();
-        String value = parameter.getValue()==null? "": parameter.getValue().toString();
+        Parameter parameter = secondaryStorageFactory.getValue();
+        String value = parameter.getValue() == null ? "" : parameter.getValue().toString();
         String origin = parameter.getOriginLabel();
 
         if (value.isEmpty()) {
@@ -77,21 +78,21 @@ public class RuleSecondaryStorage implements Rule {
 
         // "rdbms" is a type: the database is read in the JDBC url of the cluster
         String kind = orchestrationParameter.getSecondaryStorageKind();
-        if (!kind.equalsIgnoreCase(value.toString())) {
+        if (!kind.equalsIgnoreCase(value)) {
             String url = orchestrationParameter.getParameterString(OrchestrationParameter.SECONDARY_STORAGE_RDBMS_URL);
             ruleInfo.addVerifications("Database of the secondary storage [" + (kind.isEmpty() ? "unknown" : kind) + "] from the JDBC url [" + url
-                    + "] (" + orchestrationParameter.getParameter(OrchestrationParameter.SECONDARY_STORAGE_RDBMS_URL).getOriginLabel() + ")",
+                            + "] (" + orchestrationParameter.getParameter(OrchestrationParameter.SECONDARY_STORAGE_RDBMS_URL).getOriginLabel() + ")",
                     kind.isEmpty() ? RuleStatus.FAILED : RuleStatus.CORRECT, null);
         }
 
         // Does Blueberry know how to back it up?
         SecondaryStorageInt secondaryStorage = secondaryStorageFactory.getSecondaryStorage();
         if (secondaryStorage != null) {
-            ruleInfo.addVerifications("Secondary storage supported by Blueberry [" +  secondaryStorage.getName() + "] (" + origin + ")" ,
+            ruleInfo.addVerifications("Secondary storage supported by Blueberry [" + secondaryStorage.getName() + "] (" + origin + ")",
                     RuleStatus.CORRECT, null);
 
         } else {
-            ruleInfo.addVerifications("Secondary storage not supported by Blueberry [" + value + "] (" + origin + "). Supported:"+ String.join(", ", secondaryStorageFactory.getSupportedNames()),
+            ruleInfo.addVerifications("Secondary storage not supported by Blueberry [" + value + "] (" + origin + "). Supported:" + String.join(", ", secondaryStorageFactory.getSupportedNames()),
                     RuleStatus.FAILED, null);
             ruleInfo.addError("Blueberry can't back up the secondary storage [" + value + "]");
             ruleInfo.setStatus(RuleStatus.FAILED);
@@ -115,13 +116,13 @@ public class RuleSecondaryStorage implements Rule {
      * 3. configure: create the repository: CORRECT or FAILED
      */
     private void checkHistorySnapshot(RuleInfo ruleInfo, boolean execute) {
-        OrchestrationParameter.Parameter parameter = orchestrationParameter.getParameter(OrchestrationParameter.BACKUP_REPOSITORY_NAME);
+        Parameter parameter = orchestrationParameter.getParameter(OrchestrationParameter.BACKUP_REPOSITORY_NAME);
         String name = orchestrationParameter.getParameterString(OrchestrationParameter.BACKUP_REPOSITORY_NAME);
         String origin = parameter == null ? "config" : parameter.getOriginLabel();
 
         // 1. The name must exist AND come from orchestration
-        if (name.isEmpty() || parameter.getOrigin().equals(OrchestrationParameter.Parameter.Origin.CONFIG)) {
-            ruleInfo.addVerifications("Snapshot name: ["+name+"] (" + origin + ") : orchestration does not know that name and will failed.", RuleStatus.FAILED, null);
+        if (name.isEmpty() || parameter.getOrigin().equals(Parameter.Origin.CONFIG)) {
+            ruleInfo.addVerifications("Snapshot name: [" + name + "] (" + origin + ") : orchestration does not know that name and will failed.", RuleStatus.FAILED, null);
             ruleInfo.addError("Orchestration does not know the name of the Elasticsearch snapshot: POST /v2/backups/history will be refused by the cluster "
                     + "(403 No backup repository configured). Set CAMUNDA_DATA_SECONDARYSTORAGE_ELASTICSEARCH_BACKUP_REPOSITORYNAME (camunda.data.secondary-storage.elasticsearch.backup.repository-name) on the cluster"
                     + "or blueberry.orchestrationConfig.backupRepositoryName in Blueberry");
@@ -163,3 +164,4 @@ public class RuleSecondaryStorage implements Rule {
         return operation(true);
     }
 }
+

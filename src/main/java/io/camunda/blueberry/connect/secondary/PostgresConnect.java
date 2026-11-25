@@ -1,11 +1,11 @@
 package io.camunda.blueberry.connect.secondary;
 
-import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.connect.BackupComponentInt;
 import io.camunda.blueberry.connect.BackupInfo;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -98,6 +98,14 @@ public class PostgresConnect implements SecondaryStorageInt {
         this.orchestrationParameter = orchestrationParameter;
     }
 
+    static Long parseBackupId(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        Matcher matcher = BACKUP_FILE.matcher(fileName);
+        return matcher.matches() ? Long.parseLong(matcher.group(1)) : null;
+    }
+
     @Override
     public String getName() {
         return NAME;
@@ -117,14 +125,14 @@ public class PostgresConnect implements SecondaryStorageInt {
         return value.equals(SecondaryStorageFactory.normalize(NAME)) || value.equals("postgresql");
     }
 
-    @Override
-    public CamundaApplicationInt.COMPONENT getComponent() {
-        return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
-    }
-
     /* ******************************************************************** */
     /*  Backup                                                              */
     /* ******************************************************************** */
+
+    @Override
+    public BackupComponentInt.COMPONENT getComponent() {
+        return BackupComponentInt.COMPONENT.SECONDARYSTORAGE;
+    }
 
     /**
      * Start pg_dump in a thread. waitBackup waits for its end.
@@ -142,7 +150,7 @@ public class PostgresConnect implements SecondaryStorageInt {
         Path target = backupFile(backupId);
         Path partial = target.resolveSibling(target.getFileName() + ".part");
         List<String> command = backupCommand(partial);
-        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Start the PostgreSQL backup: " + String.join(" ", command));
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Start the PostgreSQL backup: " + String.join(" ", command));
         runningBackups.put(backupId, CompletableFuture.runAsync(() -> {
             try {
                 Files.createDirectories(target.getParent());
@@ -165,6 +173,10 @@ public class PostgresConnect implements SecondaryStorageInt {
         return backupOperation;
     }
 
+    /* ******************************************************************** */
+    /*  List                                                                */
+    /* ******************************************************************** */
+
     @Override
     public BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
         BackupOperation backupOperation = new BackupOperation();
@@ -176,7 +188,7 @@ public class PostgresConnect implements SecondaryStorageInt {
         }
         try {
             future.get();
-            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "PostgreSQL backup " + backupId + " completed: " + backupFile(backupId));
+            operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "PostgreSQL backup " + backupId + " completed: " + backupFile(backupId));
             backupOperation.status = 200;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -186,14 +198,10 @@ public class PostgresConnect implements SecondaryStorageInt {
             backupOperation.status = 500;
             backupOperation.title = "PostgreSQL backup " + backupId + " failed";
             backupOperation.message = e.getCause() == null ? e.getMessage() : e.getCause().getMessage();
-            operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, backupOperation.title + ": " + backupOperation.message);
+            operationLog.error(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, backupOperation.title + ": " + backupOperation.message);
         }
         return backupOperation;
     }
-
-    /* ******************************************************************** */
-    /*  List                                                                */
-    /* ******************************************************************** */
 
     /**
      * The files camunda_{backupId}.dump of the backup directory
@@ -216,7 +224,7 @@ public class PostgresConnect implements SecondaryStorageInt {
                 }
                 BackupInfo backupInfo = new BackupInfo();
                 backupInfo.backupId = backupId;
-                backupInfo.components.add(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE);
+                backupInfo.components.add(BackupComponentInt.COMPONENT.SECONDARYSTORAGE);
                 backupInfo.status = BackupInfo.Status.COMPLETED;
                 LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochMilli(Files.getLastModifiedTime(file).toMillis()), ZoneId.systemDefault());
                 backupInfo.backupTime = time;
@@ -229,14 +237,14 @@ public class PostgresConnect implements SecondaryStorageInt {
         return listBackups;
     }
 
+    /* ******************************************************************** */
+    /*  Restore                                                             */
+    /* ******************************************************************** */
+
     @Override
     public String getUrlListBackup() {
         return backupDirectory;
     }
-
-    /* ******************************************************************** */
-    /*  Restore                                                             */
-    /* ******************************************************************** */
 
     @Override
     public boolean isDatabase() {
@@ -262,8 +270,12 @@ public class PostgresConnect implements SecondaryStorageInt {
             throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 404, "PostgreSQL backup not found",
                     "The file " + file + " does not exist.");
         }
-        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "PostgreSQL backup file: " + file);
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "PostgreSQL backup file: " + file);
     }
+
+    /* ******************************************************************** */
+    /*  Commands                                                            */
+    /* ******************************************************************** */
 
     /**
      * Restore the database from the backup with pg_restore. DESTRUCTIVE: the objects of the dump replace the objects of the
@@ -273,7 +285,7 @@ public class PostgresConnect implements SecondaryStorageInt {
     public void restore(long backupId, OperationLog operationLog) throws OperationException {
         checkRestorable(backupId, operationLog);
         List<String> command = restoreCommand(backupFile(backupId));
-        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Restore PostgreSQL: " + String.join(" ", command));
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Restore PostgreSQL: " + String.join(" ", command));
         try {
             run(command);
         } catch (IOException | InterruptedException e) {
@@ -284,10 +296,6 @@ public class PostgresConnect implements SecondaryStorageInt {
                     "Restore of [" + database + "] from backup " + backupId + ": " + e.getMessage());
         }
     }
-
-    /* ******************************************************************** */
-    /*  Commands                                                            */
-    /* ******************************************************************** */
 
     Path backupFile(long backupId) {
         return Path.of(backupDirectory, FILE_PREFIX + backupId + FILE_SUFFIX);
@@ -321,6 +329,21 @@ public class PostgresConnect implements SecondaryStorageInt {
         return command;
     }
 
+    @Override
+    public PingStatus ping() {
+        if (host == null || host.isBlank()) {
+            return PingStatus.NOT_CONNECTED;
+        }
+        // a TCP connection to the server: no tool or password needed
+        try (java.net.Socket socket = new java.net.Socket()) {
+            socket.connect(new java.net.InetSocketAddress(host, port), 3000);
+            return PingStatus.CONNECTED;
+        } catch (IOException e) {
+            logger.debug("Postgres ping {}:{} failed: {}", host, port, e.getMessage());
+            return PingStatus.NOT_CONNECTED;
+        }
+    }
+
     private void addConnection(List<String> command) {
         command.add("--host=" + host);
         command.add("--port=" + port);
@@ -328,14 +351,6 @@ public class PostgresConnect implements SecondaryStorageInt {
         command.add("--dbname=" + database);
         // The password is in the environment (PGPASSWORD), not here
         command.add("--no-password");
-    }
-
-    static Long parseBackupId(String fileName) {
-        if (fileName == null) {
-            return null;
-        }
-        Matcher matcher = BACKUP_FILE.matcher(fileName);
-        return matcher.matches() ? Long.parseLong(matcher.group(1)) : null;
     }
 
     /**
@@ -382,3 +397,4 @@ public class PostgresConnect implements SecondaryStorageInt {
         }
     }
 }
+

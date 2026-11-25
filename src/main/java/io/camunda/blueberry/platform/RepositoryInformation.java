@@ -1,7 +1,7 @@
 package io.camunda.blueberry.platform;
 
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.BackupComponentInt;
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.platform.rule.RuleOptimizeRepository;
 import org.springframework.stereotype.Component;
@@ -19,25 +19,13 @@ import java.util.List;
 public class RepositoryInformation {
 
     /**
-     * @param name          component: optimize, zeeberecord
-     * @param configuration repository in the blueberry configuration (used by the backup and the restore)
-     * @param cluster       repository read in the cluster. Empty: the value can't be read, see the comment
-     * @param comment       why the cluster value is empty. Empty when the cluster value is given
-     */
-    public record Repository(String name, String configuration, String cluster, String comment) {
-    }
-
-    /**
      * The actuator is called at most every 30 seconds: the pages ask this list often
      */
     private static final long CACHE_MILLIS = 30_000;
-
     private final BlueberryConfig blueberryConfig;
     private final OrchestrationParameter orchestrationParameter;
-
     private List<Repository> cache;
     private long cacheTime = 0;
-
     public RepositoryInformation(BlueberryConfig blueberryConfig, OrchestrationParameter orchestrationParameter) {
         this.blueberryConfig = blueberryConfig;
         this.orchestrationParameter = orchestrationParameter;
@@ -50,7 +38,7 @@ public class RepositoryInformation {
         List<Repository> repositories = new ArrayList<>();
         // Operate and Tasklist have no repository of their own since 8.8: their indices are in the history backup
         repositories.add(readInCluster("optimize", blueberryConfig.getOptimizeRepository(),
-                CamundaApplicationInt.COMPONENT.OPTIMIZE, RuleOptimizeRepository.OPTIMIZE_REPOSITORY,
+                BackupComponentInt.COMPONENT.OPTIMIZE, RuleOptimizeRepository.OPTIMIZE_REPOSITORY,
                 blueberryConfig.getOptimizeActuatorUrl()));
         // The repository of the Zeebe records is created by blueberry: no component declares it
         repositories.add(new Repository("zeeberecord", blueberryConfig.getZeebeRecordRepository(), "", ""));
@@ -62,7 +50,7 @@ public class RepositoryInformation {
     /**
      * Read the repository declared by the component. When it can't be read, the cluster value is empty and the comment gives the reason.
      */
-    private Repository readInCluster(String name, String configuration, CamundaApplicationInt.COMPONENT component,
+    private Repository readInCluster(String name, String configuration, BackupComponentInt.COMPONENT component,
                                      String parameter, String actuatorUrl) {
         if (actuatorUrl == null || actuatorUrl.isBlank()) {
             return new Repository(name, configuration, "", "The actuator url of the component is not defined");
@@ -84,4 +72,14 @@ public class RepositoryInformation {
             return new Repository(name, configuration, "", "env is not exposed");
         }
     }
+
+    /**
+     * @param name          component: optimize, zeeberecord
+     * @param configuration repository in the blueberry configuration (used by the backup and the restore)
+     * @param cluster       repository read in the cluster. Empty: the value can't be read, see the comment
+     * @param comment       why the cluster value is empty. Empty when the cluster value is given
+     */
+    public record Repository(String name, String configuration, String cluster, String comment) {
+    }
 }
+

@@ -19,7 +19,7 @@ public class BackupInfo {
     /**
      * Register which conmponent declare this backup
      */
-    public Set<CamundaApplicationInt.COMPONENT> components = new HashSet<>();
+    public Set<BackupComponentInt.COMPONENT> components = new HashSet<>();
 
     public static Status fromZeebeStatus(String status) {
         switch (status) {
@@ -80,3 +80,4 @@ public class BackupInfo {
         }
     }
 }
+

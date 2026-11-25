@@ -1,7 +1,8 @@
 package io.camunda.blueberry.connect.secondary;
 
+import io.camunda.blueberry.connect.BackupComponentInt;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import io.camunda.blueberry.connect.BackupInfo;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.OperationLog;
@@ -36,8 +37,8 @@ class SecondaryStorageFactoryTest {
             return true;
         }
 
-        public CamundaApplicationInt.COMPONENT getComponent() {
-            return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
+        public BackupComponentInt.COMPONENT getComponent() {
+            return BackupComponentInt.COMPONENT.SECONDARYSTORAGE;
         }
 
         public BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
@@ -95,7 +96,7 @@ class SecondaryStorageFactoryTest {
         SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(elasticsearch), parameters("", ENV_ELASTICSEARCH));
 
         assertEquals("elasticsearch", factory.getValueString());
-        assertEquals(OrchestrationParameter.Parameter.Origin.ACTUATOR, factory.getValue().getOrigin());
+        assertEquals(Parameter.Origin.ACTUATOR, factory.getValue().getOrigin());
         assertEquals("actuator", factory.getValue().getOriginLabel());
         assertSame(elasticsearch, factory.getSecondaryStorage());
     }
@@ -104,14 +105,14 @@ class SecondaryStorageFactoryTest {
     void theConfigurationIsUsedWhenTheClusterDoesNotAnswer() {
         SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(), parameters("sqlserver", null));
         assertEquals("sqlserver", factory.getValueString());
-        assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, factory.getValue().getOrigin());
+        assertEquals(Parameter.Origin.CONFIG, factory.getValue().getOrigin());
     }
 
     @Test
     void hiddenValuesAreNotAnAnswer() {
         SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(), parameters("elasticsearch", ENV_MASKED));
         assertEquals("elasticsearch", factory.getValueString());
-        assertEquals(OrchestrationParameter.Parameter.Origin.CONFIG, factory.getValue().getOrigin());
+        assertEquals(Parameter.Origin.CONFIG, factory.getValue().getOrigin());
     }
 
     @Test
@@ -120,7 +121,7 @@ class SecondaryStorageFactoryTest {
         SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(sqlServer), parameters("", ENV_RDBMS));
         // the value is the one of the cluster
         assertEquals("rdbms", factory.getValueString());
-        assertEquals(OrchestrationParameter.Parameter.Origin.ACTUATOR, factory.getValue().getOrigin());
+        assertEquals(Parameter.Origin.ACTUATOR, factory.getValue().getOrigin());
         // the object is the one of the database in the JDBC url
         assertSame(sqlServer, factory.getSecondaryStorage());
     }
@@ -133,3 +134,4 @@ class SecondaryStorageFactoryTest {
         assertNull(factory.getSecondaryStorage());
     }
 }
+

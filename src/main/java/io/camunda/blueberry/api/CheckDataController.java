@@ -1,6 +1,5 @@
 package io.camunda.blueberry.api;
 
-import io.camunda.blueberry.connect.*;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.checkdata.CheckDataManager;
 import org.slf4j.Logger;
@@ -18,7 +17,7 @@ import java.util.Map;
 
 public class CheckDataController {
 
-private final CheckDataManager checkDataManager;
+    private final CheckDataManager checkDataManager;
 
     Logger logger = LoggerFactory.getLogger(io.camunda.blueberry.api.DashboardRestController.class);
 
@@ -33,7 +32,7 @@ private final CheckDataManager checkDataManager;
             logger.debug("Rest [/api/checkdata");
             return checkDataManager.checkData().toMap();
         } catch (OperationException oe) {
-            Map<String,Object> result = new HashMap<>();
+            Map<String, Object> result = new HashMap<>();
             result.put("errorMessage", oe.getMessage());
             result.put("error", oe.getError());
             return result;

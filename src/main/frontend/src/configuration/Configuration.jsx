@@ -8,13 +8,28 @@
 
 import React from 'react';
 import {Accordion, AccordionItem, Button, InlineNotification, Link, Tag} from "carbon-components-react";
-import {ArrowRepeat, ClipboardCheck, QuestionCircle, Terminal} from "react-bootstrap-icons";
+import {
+    ArrowRepeat,
+    CheckSquareFill,
+    ClipboardCheck,
+    ExclamationTriangleFill,
+    HourglassSplit,
+    InfoCircleFill,
+    PatchCheckFill,
+    QuestionCircle,
+    SlashCircle,
+    Terminal,
+    XCircleFill
+} from "react-bootstrap-icons";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import RestCallService from "../services/RestCallService";
 import {Alert, Modal} from 'react-bootstrap';
 import ControllerPage from "../component/ControllerPage";
 
+
+// The last result of the checkup (or the list of rules): kept when the user goes to another page, so the page is never empty
+let lastListChecks = [];
 
 class Configuration extends React.Component {
 
@@ -25,7 +40,8 @@ class Configuration extends React.Component {
         this.state = {
             display: {loading: false},
             resultCall: {status: 200, error: "", message: "", component: ""},
-            listChecks: [],
+            // The last result, else the list of the rules without status (see loadRules)
+            listChecks: lastListChecks,
             openCommands: {},
             showConfirm: false
         };
@@ -39,6 +55,20 @@ class Configuration extends React.Component {
     }
 
     componentDidMount() {
+        // The result is not known (first display): the list of the rules, without status, in the order of the checkup
+        if (!this.state.listChecks || this.state.listChecks.length === 0) {
+            this.loadRules();
+        }
+    }
+
+    loadRules() {
+        RestCallService.getInstance().getJson('/blueberry/api/configuration/rules?', this, (httpPayload) => {
+            // a checkup done meanwhile has the priority
+            if (!httpPayload.isError() && (!this.state.listChecks || this.state.listChecks.length === 0)) {
+                lastListChecks = httpPayload.getData();
+                this.setState({listChecks: lastListChecks});
+            }
+        });
     }
 
     /*           {JSON.stringify(this.state.runners, null, 2) } */
@@ -120,7 +150,7 @@ class Configuration extends React.Component {
                             <tr>
                                 <td style={{fontWeight: "bold", fontStyle: "italic", fontSize: "0.8rem"}}>{content.name}</td>
                                 <td>
-                                    {this.renderConnectionTag(content.status)}
+                                    {content.status ? this.renderConnectionTag(content.status) : null}
                                 </td>
                                 <td>
                                     {/* the actions executed by the rule, if any */}
@@ -151,6 +181,7 @@ class Configuration extends React.Component {
                                     <table className="w-full border-collapse border border-gray-300">
                                         <thead>
                                         <tr>
+                                            <th className="border p-2" style={{background: "#e0e0e0", width: "40px"}}></th>
                                             <th className="border p-2" style={{background: "#e0e0e0", color: "#161616", fontWeight: "bold"}}>Steps</th>
                                             <th className="border p-2" style={{background: "#e0e0e0", color: "#161616", fontWeight: "bold"}}>Status</th>
                                         </tr>
@@ -159,6 +190,9 @@ class Configuration extends React.Component {
                                         {content.verifications.map((verification, index) => (
                                             <React.Fragment key={index}>
                                                 <tr className="border">
+                                                    <td className="border p-2" style={{textAlign: "center", verticalAlign: "middle"}}>
+                                                        {this.renderStatusIcon(verification.actionStatus)}
+                                                    </td>
                                                     <td className="border p-2">
                                                         {verification.action}
                                                         {verification.activity &&
@@ -196,7 +230,7 @@ class Configuration extends React.Component {
                                                 </tr>
                                                 {verification.error &&
                                                     <tr className="border">
-                                                        <td colSpan="2"
+                                                        <td colSpan="3"
                                                             className={(verification.actionStatus === "INFO" || verification.actionStatus === "CORRECT") ?"border p-2 text-muted" : "border p-2 text-danger"}
                                                             style={{whiteSpace: "pre-wrap"}}>
                                                             {verification.error}
@@ -205,7 +239,7 @@ class Configuration extends React.Component {
                                                 }
                                                 {verification.configuration &&
                                                     <tr className="border">
-                                                        <td colSpan="2" className="border p-2">
+                                                        <td colSpan="3" className="border p-2">
                                                             <div className="text-muted" style={{fontSize: "0.8rem"}}>Configuration</div>
                                                             <pre style={{
                                                                 background: "#f4f4f4",
@@ -275,7 +309,8 @@ class Configuration extends React.Component {
             console.log("Configuration.startBackupCallback: error " + httpPayload.getError());
             this.setState({status: "Error"});
         } else {
-            this.setState({listChecks: httpPayload.getData()})
+            lastListChecks = httpPayload.getData();
+            this.setState({listChecks: lastListChecks})
         }
     }
 
@@ -289,6 +324,31 @@ class Configuration extends React.Component {
         this.setState({display: displayObject});
     }
 
+
+    /**
+     * An icon for the status of a verification (same colors as the tags)
+     */
+    renderStatusIcon(status) {
+        const icon = (Icon, color) => <Icon size={20} color={color} title={status}/>;
+        switch (status) {
+            case "CORRECT":
+                return icon(CheckSquareFill, "#198754");
+            case "INFO":
+                return icon(InfoCircleFill, "#0dcaf0");
+            case "FAILED":
+                return icon(XCircleFill, "#dc3545");
+            case "FAILEDBUTWILLBEFIXED":
+                return icon(ExclamationTriangleFill, "#0d6efd");
+            case "DONEWITHSUCCESS":
+                return icon(PatchCheckFill, "#161616");
+            case "INPROGRESS":
+                return icon(HourglassSplit, "#0d6efd");
+            case "DEACTIVATED":
+                return icon(SlashCircle, "#8d8d8d");
+            default:
+                return icon(QuestionCircle, "#8d8d8d");
+        }
+    }
 
     renderConnectionTag(status) {
         if (!status)

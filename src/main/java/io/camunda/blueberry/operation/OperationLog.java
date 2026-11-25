@@ -1,6 +1,6 @@
 package io.camunda.blueberry.operation;
 
-import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.BackupComponentInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -9,7 +9,7 @@ import java.util.*;
 public class OperationLog {
     private final List<Message> listMessages = new ArrayList<>();
     Logger logger = LoggerFactory.getLogger(OperationLog.class);
-    Map<CamundaApplicationInt.COMPONENT, List<String>> snapshotPerComponents = new HashMap<>();
+    Map<BackupComponentInt.COMPONENT, List<String>> snapshotPerComponents = new HashMap<>();
     private String operationName;
     private int totalNumberOfSteps;
     private int currentStep;
@@ -17,9 +17,22 @@ public class OperationLog {
     private String documentationLink;
     private long operationBeginTime;
 
-    private CamundaApplicationInt.COMPONENT component;
+    private BackupComponentInt.COMPONENT component;
 
     public OperationLog() {
+    }
+
+    /**
+     * @return the more severe of the two types: max(ERROR, WARNING) is ERROR, max(WARNING, INFO) is WARNING. A null type is ignored
+     */
+    static Type highestType(Type first, Type second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null) {
+            return first;
+        }
+        return second.ordinal() > first.ordinal() ? second : first;
     }
 
     /**
@@ -35,36 +48,38 @@ public class OperationLog {
         this.operationBeginTime = System.currentTimeMillis();
         info(component, "Start operation [" + operationName + "] with " + totalNumberOfSteps + " steps");
     }
+
     public void endOperation() {
         info(null, "Operation[" + operationName + "] : Step finished in " + (System.currentTimeMillis() - operationBeginTime) + " ms");
     }
+
+    public void setForceStep(int newStep) {
+        this.currentStep = newStep;
+    }
+
     /**
      * a new step is started
      *
      * @param stepName name of the step
      */
-    public void startOperationStep(CamundaApplicationInt.COMPONENT component, String stepName,
+    public void startOperationStep(BackupComponentInt.COMPONENT component, String stepName,
                                    String stepLabel,
                                    String documentationLink) {
         this.currentStep++;
         this.stepName = stepName;
         this.documentationLink = documentationLink;
-        info(null,  stepLabel);
+        info(null, stepLabel);
     }
 
-
-
-
-
-    public void info(CamundaApplicationInt.COMPONENT component, String message) {
-        if (component==null) {
-            logger.info( getBanner()+message);
+    public void info(BackupComponentInt.COMPONENT component, String message) {
+        if (component == null) {
+            logger.info(getBanner() + message);
         } else {
             logger.info("{} Component:{} : {}", getBanner(), component, message);
         }
         Message msg = new Message();
         msg.type = Type.INFO;
-        msg.content.add( message);
+        msg.content.add(message);
         msg.component = component;
         msg.date = new Date();
         msg.step = currentStep;
@@ -73,11 +88,11 @@ public class OperationLog {
         mergeMessage(msg);
     }
 
-    public void warning(CamundaApplicationInt.COMPONENT component, String message) {
-        logger.error(getBanner()+ message);
+    public void warning(BackupComponentInt.COMPONENT component, String message) {
+        logger.error(getBanner() + message);
         Message msg = new Message();
         msg.type = Type.WARNING;
-        msg.content.add( message);
+        msg.content.add(message);
         msg.component = component;
         msg.date = new Date();
         msg.step = currentStep;
@@ -85,7 +100,7 @@ public class OperationLog {
         mergeMessage(msg);
     }
 
-    public void error(CamundaApplicationInt.COMPONENT component, String message) {
+    public void error(BackupComponentInt.COMPONENT component, String message) {
         logger.error(getBanner() + message);
         Message msg = new Message();
         msg.type = Type.ERROR;
@@ -101,7 +116,7 @@ public class OperationLog {
         return listMessages;
     }
 
-    public void addSnapshotName(CamundaApplicationInt.COMPONENT component, String snapshotName) {
+    public void addSnapshotName(BackupComponentInt.COMPONENT component, String snapshotName) {
         List<String> listSnapshop = snapshotPerComponents.get(component);
         if (listSnapshop == null) {
             listSnapshop = new ArrayList();
@@ -130,18 +145,9 @@ public class OperationLog {
         return component == null ? "" : component.name();
     }
 
-    enum Type {INFO, WARNING, ERROR}
-
-    public static class Message {
-        public Type type;
-        public List<String> content = new ArrayList<>();
-        public CamundaApplicationInt.COMPONENT component;
-        public Date date;
-        public int step;
-        public String stepName;
-        public String documentationLink;
-    }
-/** if the message is on the same step as the previous step, then we merge them **/
+    /**
+     * if the message is on the same step as the previous step, then we merge them
+     **/
     public void mergeMessage(Message message) {
         if (listMessages.isEmpty()) {
             listMessages.add(message);
@@ -152,24 +158,25 @@ public class OperationLog {
             listMessages.add(message);
             return;
         }
-        previous.content.add( message.content.get(0));
+        previous.content.add(message.content.get(0));
         // update the previous.type: keep the high level. The enum is ordered by severity: INFO < WARNING < ERROR
         previous.type = highestType(previous.type, message.type);
     }
 
-    /**
-     * @return the more severe of the two types: max(ERROR, WARNING) is ERROR, max(WARNING, INFO) is WARNING. A null type is ignored
-     */
-    static Type highestType(Type first, Type second) {
-        if (first == null) {
-            return second;
-        }
-        if (second == null) {
-            return first;
-        }
-        return second.ordinal() > first.ordinal() ? second : first;
+    private String getBanner() {
+        return currentStep + "/" + totalNumberOfSteps + "(" + stepName + ") :";
     }
-    private String getBanner()
-    { return currentStep+"/"+totalNumberOfSteps + "("+stepName+") :";
+
+    enum Type {INFO, WARNING, ERROR}
+
+    public static class Message {
+        public Type type;
+        public List<String> content = new ArrayList<>();
+        public BackupComponentInt.COMPONENT component;
+        public Date date;
+        public int step;
+        public String stepName;
+        public String documentationLink;
     }
 }
+

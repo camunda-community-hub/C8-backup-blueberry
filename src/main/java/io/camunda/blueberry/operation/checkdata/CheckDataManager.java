@@ -1,6 +1,8 @@
 package io.camunda.blueberry.operation.checkdata;
 
-import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.BackupComponentInt;
+import io.camunda.blueberry.connect.OptimizeConnect;
+import io.camunda.blueberry.connect.ZeebeConnect;
 import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.exception.OperationException;
 import io.camunda.blueberry.operation.backup.BackupJob;
@@ -9,21 +11,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
 public class CheckDataManager {
-    private final ElasticSearchConnect elasticSearchConnect;
-    Logger logger = LoggerFactory.getLogger(BackupManager.class);
     final OptimizeConnect optimizeConnect;
     final ZeebeConnect zeebeConnect;
-    private BackupJob backupJob;
-
-
+    private final ElasticSearchConnect elasticSearchConnect;
+    Logger logger = LoggerFactory.getLogger(BackupManager.class);
     List<BackupComponentInt> listBackupComponents;
-
-    private boolean inProgress = false;
+    private BackupJob backupJob;
+    private final boolean inProgress = false;
 
     public CheckDataManager(OptimizeConnect optimizeConnect,
                             ZeebeConnect zeebeConnect, ElasticSearchConnect elasticSearchConnect,

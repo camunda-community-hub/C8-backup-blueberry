@@ -1,8 +1,8 @@
 package io.camunda.blueberry.platform.rule;
 
-
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -150,7 +150,8 @@ public class RuleZeebeContainer implements Rule {
      * @return where the value of the parameter comes from: actuator or config
      */
     private String originOf(String parameterName) {
-        OrchestrationParameter.Parameter parameter = orchestrationParameter.getParameter(parameterName);
+        Parameter parameter = orchestrationParameter.getParameter(parameterName);
         return parameter == null ? "config" : parameter.getOriginLabel();
     }
 }
+

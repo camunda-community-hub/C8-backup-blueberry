@@ -1,9 +1,10 @@
 package io.camunda.blueberry.operation.restoration;
 
+import io.camunda.blueberry.connect.BackupComponentInt;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.BackupInfo;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.OptimizeConnect;
 import io.camunda.blueberry.connect.ZeebeRestApi;
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 import io.camunda.blueberry.platform.componentconfig.TestOrchestration;
@@ -31,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The restore with the Restore API: the order of the calls, and what happens when a step fails.
  */
-class RestoreApiExecutorTest {
+class RestoreJobTest {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String RECOVERING = "{\"brokers\":[{\"partitions\":[{\"partitionId\":1,\"role\":\"leader\",\"health\":\"RECOVERING\"}]},"
             + "{\"brokers\":0,\"partitions\":[{\"partitionId\":2,\"state\":\"recovering\"}]}]}";
@@ -146,8 +147,8 @@ class RestoreApiExecutorTest {
             return true;
         }
 
-        public CamundaApplicationInt.COMPONENT getComponent() {
-            return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
+        public BackupComponentInt.COMPONENT getComponent() {
+            return BackupComponentInt.COMPONENT.SECONDARYSTORAGE;
         }
 
         public BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
@@ -177,9 +178,27 @@ class RestoreApiExecutorTest {
         }
     }
 
-    private static RestoreApiExecutor executor(FakeRest rest, FakeStorage storage, BooleanSupplier optimizeRunning) {
+    /** Optimize in the cluster: the fake records its stop and its start in the calls of the rest fake */
+    private static RestoreJob executor(FakeRest rest, FakeStorage storage, BooleanSupplier optimizeInCluster) {
         SecondaryStorageFactory factory = new SecondaryStorageFactory(List.of(storage), TestOrchestration.build(Map.of(OrchestrationParameter.SECONDARY_STORAGE.name(), "fake"), null));
-        return new RestoreApiExecutor(rest, factory, optimizeRunning, 1, 5);
+        OptimizeConnect optimize = new OptimizeConnect(new BlueberryConfig(), new RestTemplate(), null) {
+            @Override
+            public boolean isActive() {
+                return optimizeInCluster.getAsBoolean();
+            }
+
+            @Override
+            public int stop(OperationLog log) {
+                rest.calls.add("OPTIMIZE stop");
+                return 1;
+            }
+
+            @Override
+            public void start(int replicas, OperationLog log) {
+                rest.calls.add("OPTIMIZE start " + replicas);
+            }
+        };
+        return new RestoreJob(optimize, rest, factory, new OperationLog(), 1, 5);
     }
 
     @Test
@@ -187,7 +206,7 @@ class RestoreApiExecutorTest {
         FakeRest rest = new FakeRest();
         FakeStorage storage = new FakeStorage(rest.calls, false);
 
-        executor(rest, storage, () -> false).execute(7, new OperationLog());
+        executor(rest, storage, () -> false).restore(7);
 
         // the order of the documentation, and nothing is deleted before the dry run is accepted
         assertTrue(rest.position("GET /backups/runtime/7") < rest.position("PATCH /mode?mode=RECOVERING"));
@@ -204,7 +223,7 @@ class RestoreApiExecutorTest {
         FakeRest rest = new FakeRest();
         FakeStorage storage = new FakeStorage(rest.calls, true);
 
-        executor(rest, storage, () -> false).execute(7, new OperationLog());
+        executor(rest, storage, () -> false).restore(7);
 
         // Zeebe reads the exporter position in the restored database
         assertTrue(rest.position("STORAGE restore") < rest.position("POST /restore?dryRun=true"));
@@ -212,26 +231,42 @@ class RestoreApiExecutorTest {
     }
 
     @Test
-    void optimizeIsNotStoppedByTheRestoreApi() {
+    void optimizeIsStoppedAfterTheValidationAndStartedAtTheEnd() throws Exception {
         FakeRest rest = new FakeRest();
         FakeStorage storage = new FakeStorage(rest.calls, false);
 
-        OperationException e = assertThrows(OperationException.class, () -> executor(rest, storage, () -> true).execute(7, new OperationLog()));
+        executor(rest, storage, () -> true).restore(7);
 
-        assertTrue(e.getMessage().contains("Optimize"), e.getMessage());
-        // nothing was changed
-        assertFalse(rest.called("PATCH /mode?mode=RECOVERING"));
-        assertFalse(rest.called("STORAGE restore"));
+        assertTrue(rest.position("GET /backups/runtime/7") < rest.position("OPTIMIZE stop"));
+        assertTrue(rest.position("OPTIMIZE stop") < rest.position("PATCH /mode?mode=RECOVERING"));
+        assertTrue(rest.position("STORAGE restore") < rest.position("OPTIMIZE start 1"));
+        assertTrue(rest.position("GET /restore") < rest.position("OPTIMIZE start 1"));
     }
 
     @Test
-    void optimizeDoesNotMatterForADatabase() throws Exception {
+    void optimizeNotInTheClusterIsNotTouched() throws Exception {
         FakeRest rest = new FakeRest();
-        FakeStorage storage = new FakeStorage(rest.calls, true);
+        FakeStorage storage = new FakeStorage(rest.calls, false);
 
-        executor(rest, storage, () -> true).execute(7, new OperationLog());
+        executor(rest, storage, () -> false).restore(7);
 
+        assertFalse(rest.called("OPTIMIZE stop"));
+        assertFalse(rest.called("OPTIMIZE start 1"));
         assertTrue(rest.called("POST /restore"));
+    }
+
+    @Test
+    void optimizeIsNotStoppedWhenTheValidationFails() {
+        FakeRest rest = new FakeRest();
+        rest.backupState = "IN_PROGRESS";
+        FakeStorage storage = new FakeStorage(rest.calls, false);
+
+        assertThrows(OperationException.class, () -> executor(rest, storage, () -> true).restore(7));
+
+        // the validation is the first step: nothing is stopped, nothing to start again
+        assertFalse(rest.called("OPTIMIZE stop"));
+        assertFalse(rest.called("OPTIMIZE start 1"));
+        assertFalse(rest.called("PATCH /mode?mode=RECOVERING"));
     }
 
     @Test
@@ -240,7 +275,7 @@ class RestoreApiExecutorTest {
         rest.backupState = "IN_PROGRESS";
         FakeStorage storage = new FakeStorage(rest.calls, false);
 
-        assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).execute(7, new OperationLog()));
+        assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).restore(7));
 
         assertFalse(rest.called("PATCH /mode?mode=RECOVERING"));
     }
@@ -251,7 +286,7 @@ class RestoreApiExecutorTest {
         rest.dryRunStatus = 404;
         FakeStorage storage = new FakeStorage(rest.calls, false);
 
-        OperationException e = assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).execute(7, new OperationLog()));
+        OperationException e = assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).restore(7));
 
         assertEquals(404, e.getStatus());
         assertFalse(rest.called("STORAGE restore"));
@@ -265,7 +300,7 @@ class RestoreApiExecutorTest {
         FakeStorage storage = new FakeStorage(rest.calls, false);
         storage.failRestore = true;
 
-        assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).execute(7, new OperationLog()));
+        assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).restore(7));
 
         // some indices may be deleted: the restore must be started again, the cluster must not process
         assertFalse(rest.called("PATCH /mode?mode=PROCESSING"));
@@ -278,7 +313,7 @@ class RestoreApiExecutorTest {
         rest.restoreStatusBody = "{\"status\":\"FAILED\"}";
         FakeStorage storage = new FakeStorage(rest.calls, false);
 
-        OperationException e = assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).execute(7, new OperationLog()));
+        OperationException e = assertThrows(OperationException.class, () -> executor(rest, storage, () -> false).restore(7));
 
         assertTrue(e.getMessage().contains("FAILED"), e.getMessage());
         assertFalse(rest.called("PATCH /mode?mode=PROCESSING"));
@@ -290,23 +325,85 @@ class RestoreApiExecutorTest {
         rest.restoreStatusHttp = 404;
         FakeStorage storage = new FakeStorage(rest.calls, false);
 
-        executor(rest, storage, () -> false).execute(7, new OperationLog());
+        executor(rest, storage, () -> false).restore(7);
 
         assertTrue(rest.called("GET /restore"));
     }
 
+    private static String lastMessage(RestoreJob job) {
+        List<OperationLog.Message> messages = job.getOperationLog().getMessages();
+        List<String> content = messages.get(messages.size() - 1).content;
+        return content.get(content.size() - 1);
+    }
+
+    @Test
+    void aFailureWhileTheStorageIsReplacedLeavesThePlatformInconsistentAndOptimizeStopped() {
+        FakeRest rest = new FakeRest();
+        FakeStorage storage = new FakeStorage(rest.calls, false);
+        storage.failRestore = true;
+        RestoreJob job = executor(rest, storage, () -> true);
+
+        assertThrows(OperationException.class, () -> job.restore(7));
+
+        assertFalse(job.isConsistent());
+        assertFalse(rest.called("OPTIMIZE start 1"), "Optimize must not start on a platform which is not consistent");
+        assertTrue(lastMessage(job).contains("NOT CONSISTENT"), lastMessage(job));
+    }
+
+    @Test
+    void aFailureOfTheRestoreOfZeebeLeavesThePlatformInconsistent() {
+        FakeRest rest = new FakeRest();
+        rest.restoreStatusBody = "{\"status\":\"FAILED\"}";
+        FakeStorage storage = new FakeStorage(rest.calls, false);
+        RestoreJob job = executor(rest, storage, () -> true);
+
+        assertThrows(OperationException.class, () -> job.restore(7));
+
+        assertFalse(job.isConsistent());
+        assertFalse(rest.called("OPTIMIZE start 1"));
+        assertTrue(lastMessage(job).contains("NOT CONSISTENT"), lastMessage(job));
+    }
+
+    @Test
+    void aFailureBeforeTheDataIsReplacedLeavesThePlatformConsistent() {
+        FakeRest rest = new FakeRest();
+        rest.dryRunStatus = 404;
+        FakeStorage storage = new FakeStorage(rest.calls, false);
+        RestoreJob job = executor(rest, storage, () -> true);
+
+        assertThrows(OperationException.class, () -> job.restore(7));
+
+        assertTrue(job.isConsistent());
+        assertTrue(rest.called("OPTIMIZE start 1"), "nothing was changed: Optimize is started again");
+        assertTrue(rest.called("PATCH /mode?mode=PROCESSING"));
+        assertFalse(lastMessage(job).contains("NOT CONSISTENT"), lastMessage(job));
+    }
+
+    @Test
+    void aSuccessfulRestoreIsConsistent() throws Exception {
+        FakeRest rest = new FakeRest();
+        FakeStorage storage = new FakeStorage(rest.calls, false);
+        RestoreJob job = executor(rest, storage, () -> true);
+
+        job.restore(7);
+
+        assertTrue(job.isConsistent());
+        assertEquals(RestoreJob.JOBSTATUS.TERMINATED, job.getJobStatus());
+    }
+
     @Test
     void theRecoveryModeIsReadInTheTopology() throws Exception {
-        assertTrue(RestoreApiExecutor.allPartitionsRecovering(MAPPER.readTree(RECOVERING)));
-        assertFalse(RestoreApiExecutor.allPartitionsRecovering(MAPPER.readTree(PROCESSING)));
-        assertFalse(RestoreApiExecutor.allPartitionsRecovering(MAPPER.readTree("{\"brokers\":[]}")));
-        assertTrue(RestoreApiExecutor.anyPartitionRecovering(MAPPER.readTree(RECOVERING)));
-        assertFalse(RestoreApiExecutor.anyPartitionRecovering(MAPPER.readTree(PROCESSING)));
+        assertTrue(RestoreJob.allPartitionsRecovering(MAPPER.readTree(RECOVERING)));
+        assertFalse(RestoreJob.allPartitionsRecovering(MAPPER.readTree(PROCESSING)));
+        assertFalse(RestoreJob.allPartitionsRecovering(MAPPER.readTree("{\"brokers\":[]}")));
+        assertTrue(RestoreJob.anyPartitionRecovering(MAPPER.readTree(RECOVERING)));
+        assertFalse(RestoreJob.anyPartitionRecovering(MAPPER.readTree(PROCESSING)));
     }
 
     @Test
     void theChangeIdIsInTheAnswer() throws Exception {
-        assertEquals(5L, RestoreApiExecutor.changeId(new ZeebeRestApi.RestResult(202, "{\"changeId\":5}", MAPPER.readTree("{\"changeId\":5}"))));
-        assertEquals(-1L, RestoreApiExecutor.changeId(new ZeebeRestApi.RestResult(204, "", null)));
+        assertEquals(5L, RestoreJob.changeId(new ZeebeRestApi.RestResult(202, "{\"changeId\":5}", MAPPER.readTree("{\"changeId\":5}"))));
+        assertEquals(-1L, RestoreJob.changeId(new ZeebeRestApi.RestResult(204, "", null)));
     }
 }
+

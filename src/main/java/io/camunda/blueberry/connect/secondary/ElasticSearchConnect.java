@@ -1,19 +1,17 @@
 package io.camunda.blueberry.connect.secondary;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.camunda.blueberry.config.BlueberryConfig;
-import io.camunda.blueberry.connect.BackupComponentInt;
-import io.camunda.blueberry.connect.BackupInfo;
-import io.camunda.blueberry.connect.CamundaApplicationInt;
-import io.camunda.blueberry.connect.OperationResult;
-import io.camunda.blueberry.connect.ZeebeRestApi;
+import io.camunda.blueberry.connect.*;
 import io.camunda.blueberry.connect.container.Container;
 import io.camunda.blueberry.connect.container.ContainerFactory;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.exception.ElasticsearchException;
 import io.camunda.blueberry.exception.OperationException;
+import io.camunda.blueberry.exception.SnapshotRepositoryError;
 import io.camunda.blueberry.operation.OperationLog;
-import io.camunda.blueberry.operation.restoration.ElasticsearchRestoreApi;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,8 +19,6 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -32,33 +28,112 @@ import java.util.regex.Pattern;
 
 @Component
 public class ElasticSearchConnect implements SecondaryStorageInt {
-    Logger logger = LoggerFactory.getLogger(ElasticSearchConnect.class);
-
-
-    public String getName() {
-        return "ElasticSearch";
-    }
-    BlueberryConfig blueberryConfig;
-
-    ContainerFactory containerFactory;
-
-    @Autowired
-    private RestTemplate restTemplate; // Injected instance
-
+    /**
+     * Prefix of the name of the snapshot of the Zeebe records (documentation of the backup, step 6):
+     * camunda_zeebe_records_backup_{backupId}
+     */
+    public static final String ZEEBE_RECORD_SNAPSHOT_PREFIX = "camunda_zeebe_records_backup_";
+    /**
+     * The snapshot of the Zeebe records: with the prefix of the documentation, or with the backup id only (the older name of Blueberry)
+     */
+    private static final Pattern ZEEBE_RECORD_SNAPSHOT = Pattern.compile("^(?:" + ZEEBE_RECORD_SNAPSHOT_PREFIX + ")?(\\d+)$");
+    /**
+     * The snapshots of the history backup (Operate, Tasklist): camunda_webapps_{backupId}_{version}_part_k_of_n
+     */
+    private static final Pattern WEBAPPS_SNAPSHOT = Pattern.compile("^camunda_webapps_(\\d+)_.+_part_\\d+_of_\\d+$");
     private final ZeebeRestApi zeebeRestApi;
-    private final ElasticsearchRestoreApi elasticsearchRestoreApi;
-
-    public ElasticSearchConnect(BlueberryConfig blueberryConfig, ContainerFactory containerFactory, ZeebeRestApi zeebeRestApi,
-                                ElasticsearchRestoreApi elasticsearchRestoreApi) {
-        this.blueberryConfig = blueberryConfig;
-        this.containerFactory = containerFactory;
-        this.zeebeRestApi = zeebeRestApi;
-        this.elasticsearchRestoreApi = elasticsearchRestoreApi;
-    }
+    private final ElasticsearchRepositories repositories;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    Logger logger = LoggerFactory.getLogger(ElasticSearchConnect.class);
+    BlueberryConfig blueberryConfig;
+    ContainerFactory containerFactory;
 
     /* ******************************************************************** */
     /*  Restore (Camunda 8.10 Restore API: the cluster is in recovery mode) */
     /* ******************************************************************** */
+    @Autowired
+    private RestTemplate restTemplate; // Injected instance
+
+    public ElasticSearchConnect(BlueberryConfig blueberryConfig, ContainerFactory containerFactory, ZeebeRestApi zeebeRestApi,
+                                ElasticsearchRepositories repositories) {
+        this.repositories = repositories;
+        this.blueberryConfig = blueberryConfig;
+        this.containerFactory = containerFactory;
+        this.zeebeRestApi = zeebeRestApi;
+    }
+
+    /**
+     * An Elasticsearch error is a JSON object with an "error" key at the top level.
+     * Do not search the word "error" in the whole body: a valid answer can contain it, for example
+     * a template with a field named "error" (Kibana reporting).
+     */
+    static boolean hasTopLevelElasticsearchError(String body, ObjectMapper objectMapper) {
+        if (body == null || body.isBlank()) {
+            return false;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            return root.isObject() && root.has("error");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static OperationException esError(String message) {
+        return new OperationException(OperationException.BLUEBERRYERRORCODE.ELASTICSEARCH_CLIENT, 500,
+                "Elasticsearch restore failed", message);
+    }
+
+    /* ******************************************************************** */
+    /*  Restore: the calls to Elasticsearch                                 */
+    /* ******************************************************************** */
+
+    static String zeebeRecordSnapshotName(long backupId) {
+        return ZEEBE_RECORD_SNAPSHOT_PREFIX + backupId;
+    }
+
+    /**
+     * @return the backup id of a snapshot of the Zeebe records, null if the snapshot is something else (the snapshots of Operate,
+     * Tasklist or Optimize can be in the same repository)
+     */
+    static Long zeebeRecordBackupId(String snapshotName) {
+        if (snapshotName == null) {
+            return null;
+        }
+        Matcher matcher = ZEEBE_RECORD_SNAPSHOT.matcher(snapshotName);
+        return matcher.matches() ? Long.valueOf(matcher.group(1)) : null;
+    }
+
+    /**
+     * @return the backup id of a snapshot of the secondary storage: the history backup (webapps) or the Zeebe records. Null for the
+     * other snapshots (Optimize)
+     */
+    static Long secondaryStorageBackupId(String snapshotName) {
+        if (snapshotName == null) {
+            return null;
+        }
+        Matcher matcher = WEBAPPS_SNAPSHOT.matcher(snapshotName);
+        return matcher.matches() ? Long.valueOf(matcher.group(1)) : zeebeRecordBackupId(snapshotName);
+    }
+
+    /**
+     * @return the state of the snapshot in the answer of the creation (wait_for_completion=true), null if there is none
+     */
+    private static String snapshotState(String body) {
+        if (body == null) {
+            return null;
+        }
+        try {
+            JsonNode state = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body).path("snapshot").path("state");
+            return state.isMissingNode() ? null : state.asText();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public String getName() {
+        return "ElasticSearch";
+    }
 
     @Override
     public boolean supportsRestore() {
@@ -71,11 +146,11 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     @Override
     public void checkRestorable(long backupId, OperationLog operationLog) throws OperationException {
         List<ElasticsearchSnapshotPlan.Planned> plan = planSnapshots(backupId);
-        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Elasticsearch: " + plan.size() + " snapshots found for the backup "
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Elasticsearch: " + plan.size() + " snapshots found for the backup "
                 + backupId + ": " + plan.stream().map(ElasticsearchSnapshotPlan.Planned::name).toList());
 
         // The restore does not recreate the templates: Camunda creates them when it starts on an empty datastore
-        List<String> templates = elasticsearchRestoreApi.listIndexTemplateNames();
+        List<String> templates = listIndexTemplateNames();
         boolean hasTemplates = templates.stream().anyMatch(t -> t.toLowerCase(Locale.ROOT).contains("zeebe-record"))
                 && templates.stream().anyMatch(t -> {
             String name = t.toLowerCase(Locale.ROOT);
@@ -84,7 +159,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
         if (!hasTemplates) {
             throw new OperationException(OperationException.BLUEBERRYERRORCODE.CHECK, 400, "Index templates missing",
                     "The index templates of Zeebe, Operate or Tasklist are not in Elasticsearch. On a new Elasticsearch, start Camunda "
-                            + "once so it creates them (curl -s " + elasticsearchRestoreApi.baseUrl() + "/_index_template), then restore.");
+                            + "once so it creates them (curl -s " + blueberryConfig.getElasticsearchUrl() + "/_index_template), then restore.");
         }
     }
 
@@ -95,16 +170,16 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     public void restore(long backupId, OperationLog operationLog) throws OperationException {
         List<ElasticsearchSnapshotPlan.Planned> plan = planSnapshots(backupId);
 
-        for (String index : elasticsearchRestoreApi.listIndices()) {
+        for (String index : listIndices()) {
             if (ElasticsearchSnapshotPlan.isCamundaIndex(index)) {
-                operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Delete the index " + index);
-                elasticsearchRestoreApi.deleteIndex(index);
+                operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Delete the index " + index);
+                deleteIndex(index);
             }
         }
         for (ElasticsearchSnapshotPlan.Planned snapshot : plan) {
-            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Restore the snapshot " + snapshot.name()
+            operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Restore the snapshot " + snapshot.name()
                     + " from the repository " + snapshot.repository());
-            elasticsearchRestoreApi.restoreSnapshot(snapshot.repository(), snapshot.name());
+            restoreSnapshot(snapshot.repository(), snapshot.name());
         }
     }
 
@@ -113,19 +188,129 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
      */
     List<ElasticsearchSnapshotPlan.Planned> planSnapshots(long backupId) throws OperationException {
         Map<String, List<String>> namesPerRepository = new LinkedHashMap<>();
-        for (String repository : Arrays.asList(blueberryConfig.getZeebeRecordRepository(),
-                blueberryConfig.getOptimizeRepository(), blueberryConfig.getZeebeRepository())) {
+        // The repositories of the backup: blueberry.elasticsearch.zeebeRecordRepository and blueberry.optimizeRepository.
+        // The old value blueberry.zeebeRepository is not used by the backup, it is not searched (the repository may not exist: 404 repository_missing_exception)
+        // The same rule as the backup: the repository declared by the cluster (actuator), else the configuration
+        Parameter zeebeRecordRepository = repositories.zeebeRecord();
+        Parameter optimizeRepository = repositories.optimize();
+        logger.info("Snapshots searched in the repositories: Zeebe records [{}] {}, Optimize [{}] {}", zeebeRecordRepository.getValueString(),
+                zeebeRecordRepository.describe(), optimizeRepository.getValueString(), optimizeRepository.describe());
+        for (String repository : Arrays.asList(zeebeRecordRepository.getValueString(), optimizeRepository.getValueString())) {
             if (repository != null && !repository.isBlank() && !namesPerRepository.containsKey(repository)) {
-                namesPerRepository.put(repository, elasticsearchRestoreApi.listSnapshotNames(repository));
+                namesPerRepository.put(repository, listSnapshotNames(repository));
             }
         }
         return ElasticsearchSnapshotPlan.plan(backupId, namesPerRepository);
+    }
+
+    /**
+     * The names of all the indices
+     */
+    List<String> listIndices() throws OperationException {
+        String body = esCall(blueberryConfig.getElasticsearchUrl() + "/_cat/indices?h=index", HttpMethod.GET);
+        List<String> indices = new ArrayList<>();
+        for (String line : body.split("\\R")) {
+            String index = line.trim();
+            if (!index.isEmpty()) {
+                indices.add(index);
+            }
+        }
+        return indices;
+    }
+
+    void deleteIndex(String index) throws OperationException {
+        esCall(blueberryConfig.getElasticsearchUrl() + "/" + index, HttpMethod.DELETE);
+    }
+
+    /**
+     * The names of the snapshots of a repository
+     */
+    List<String> listSnapshotNames(String repository) throws OperationException {
+        String body = esCall(blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + repository + "/_all", HttpMethod.GET);
+        try {
+            JsonNode snapshots = objectMapper.readTree(body).path("snapshots");
+            List<String> names = new ArrayList<>();
+            if (snapshots.isArray()) {
+                for (JsonNode snapshot : snapshots) {
+                    names.add(snapshot.path("snapshot").asText());
+                }
+            }
+            return names;
+        } catch (Exception e) {
+            throw esError("Cannot read snapshots in repository " + repository + ". " + e.getMessage());
+        }
+    }
+
+    /**
+     * Restore a snapshot, and wait for the end. No index filter
+     */
+    void restoreSnapshot(String repository, String snapshot) throws OperationException {
+        esCall(blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + repository + "/" + snapshot + "/_restore?wait_for_completion=true", HttpMethod.POST);
+    }
+
+    /**
+     * Names of all the templates. Two kinds exist in Elasticsearch, and Camunda uses both:
+     * <ul>
+     *   <li>composable templates (_index_template): Zeebe, Operate, Tasklist</li>
+     *   <li>legacy templates (_template): Optimize, for example optimize-variable-update-instance_v2</li>
+     * </ul>
+     */
+    List<String> listIndexTemplateNames() throws OperationException {
+        List<String> names = new ArrayList<>();
+        String body = esCall(blueberryConfig.getElasticsearchUrl() + "/_index_template", HttpMethod.GET);
+        try {
+            JsonNode templates = objectMapper.readTree(body).path("index_templates");
+            if (templates.isArray()) {
+                for (JsonNode template : templates) {
+                    names.add(template.path("name").asText());
+                }
+            }
+        } catch (Exception e) {
+            throw esError("Cannot read index templates. " + e.getMessage());
+        }
+
+        // Legacy templates: the answer is an object, the keys are the names of the templates
+        try {
+            String legacyBody = esCall(blueberryConfig.getElasticsearchUrl() + "/_template", HttpMethod.GET);
+            objectMapper.readTree(legacyBody).fieldNames().forEachRemaining(names::add);
+        } catch (Exception e) {
+            // Not fatal: a cluster may not support the legacy templates API
+        }
+        return names;
+    }
+
+    /**
+     * One call to Elasticsearch, without body
+     *
+     * @return the body of the answer. An error of Elasticsearch (a status other than 2xx, or a top level "error" in the answer) is an OperationException
+     */
+    private String esCall(String url, HttpMethod method) throws OperationException {
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(url, method, HttpEntity.EMPTY, String.class);
+            String body = response.getBody() == null ? "" : response.getBody();
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw esError("Elasticsearch " + method + " " + url + " returned " + response.getStatusCode().value());
+            }
+            if (hasTopLevelElasticsearchError(body, objectMapper)) {
+                throw esError("Elasticsearch " + method + " " + url + " failed: " + (body.length() > 500 ? body.substring(0, 500) : body));
+            }
+            return body;
+        } catch (OperationException e) {
+            throw e;
+        } catch (org.springframework.web.client.RestClientException e) {
+            throw esError("Elasticsearch " + method + " " + url + " failed: " + e.getMessage());
+        }
     }
 
     public OperationResult connection() {
         OperationResult operationResult = new OperationResult();
         operationResult.success = true;
         return operationResult;
+    }
+
+    @Override
+    public PingStatus ping() {
+        return isConnected() ? PingStatus.CONNECTED : PingStatus.NOT_CONNECTED;
     }
 
     public boolean isConnected() {
@@ -157,8 +342,8 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
      *
      * @return the connection info
      */
-    public CamundaApplicationInt.ConnectionInfo isConnectedInformation() {
-        return new CamundaApplicationInt.ConnectionInfo(isConnected(), "Url Connection [" + blueberryConfig.getElasticsearchUrl() + "]");
+    public ConnectionInfo isConnectedInformation() {
+        return new ConnectionInfo(isConnected(), "Url Connection [" + blueberryConfig.getElasticsearchUrl() + "]");
     }
 
     public OperationResult existRepository(String repositoryName) {
@@ -266,7 +451,6 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
 
     }
 
-
     @Override
     public boolean isActive() {
         // Only when blueberry.elasticsearch.enabled is true
@@ -274,52 +458,8 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     }
 
     @Override
-    public CamundaApplicationInt.COMPONENT getComponent() {
-        return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
-    }
-
-    /**
-     * Prefix of the name of the snapshot of the Zeebe records (documentation of the backup, step 6):
-     * camunda_zeebe_records_backup_{backupId}
-     */
-    public static final String ZEEBE_RECORD_SNAPSHOT_PREFIX = "camunda_zeebe_records_backup_";
-
-    /**
-     * The snapshot of the Zeebe records: with the prefix of the documentation, or with the backup id only (the older name of Blueberry)
-     */
-    private static final Pattern ZEEBE_RECORD_SNAPSHOT = Pattern.compile("^(?:" + ZEEBE_RECORD_SNAPSHOT_PREFIX + ")?(\\d+)$");
-
-    /**
-     * The snapshots of the history backup (Operate, Tasklist): camunda_webapps_{backupId}_{version}_part_k_of_n
-     */
-    private static final Pattern WEBAPPS_SNAPSHOT = Pattern.compile("^camunda_webapps_(\\d+)_.+_part_\\d+_of_\\d+$");
-
-    static String zeebeRecordSnapshotName(long backupId) {
-        return ZEEBE_RECORD_SNAPSHOT_PREFIX + backupId;
-    }
-
-    /**
-     * @return the backup id of a snapshot of the Zeebe records, null if the snapshot is something else (the snapshots of Operate,
-     * Tasklist or Optimize can be in the same repository)
-     */
-    static Long zeebeRecordBackupId(String snapshotName) {
-        if (snapshotName == null) {
-            return null;
-        }
-        Matcher matcher = ZEEBE_RECORD_SNAPSHOT.matcher(snapshotName);
-        return matcher.matches() ? Long.valueOf(matcher.group(1)) : null;
-    }
-
-    /**
-     * @return the backup id of a snapshot of the secondary storage: the history backup (webapps) or the Zeebe records. Null for the
-     * other snapshots (Optimize)
-     */
-    static Long secondaryStorageBackupId(String snapshotName) {
-        if (snapshotName == null) {
-            return null;
-        }
-        Matcher matcher = WEBAPPS_SNAPSHOT.matcher(snapshotName);
-        return matcher.matches() ? Long.valueOf(matcher.group(1)) : zeebeRecordBackupId(snapshotName);
+    public BackupComponentInt.COMPONENT getComponent() {
+        return BackupComponentInt.COMPONENT.SECONDARYSTORAGE;
     }
 
     /**
@@ -364,7 +504,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     public BackupOperation backupApplication(Long backupId, OperationLog operationLog) {
         BackupOperation backupOperation = new BackupOperation();
         ZeebeRestApi.RestResult start = zeebeRestApi.takeHistoryBackup(backupId);
-        operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Start the history backup (Operate, Tasklist) " + backupId
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Start the history backup (Operate, Tasklist) " + backupId
                 + ": status " + start.status() + " " + (start.raw() == null ? "" : start.raw()));
         backupOperation.status = start.status();
         if (!start.isSuccess()) {
@@ -400,7 +540,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
             }
             String stateName = state.body().path("state").asText();
             if ("COMPLETED".equalsIgnoreCase(stateName)) {
-                operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "History backup " + backupId + " completed");
+                operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "History backup " + backupId + " completed");
                 backupOperation.status = 202;
                 return backupOperation;
             }
@@ -426,45 +566,30 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
      */
     public BackupOperation backupZeebeRecord(Long backupId, OperationLog operationLog) {
         BackupOperation backupOperation = new BackupOperation();
-        String repository = blueberryConfig.getZeebeRecordRepository();
+        String repository = repositories.zeebeRecord().getValueString();
         String snapshot = zeebeRecordSnapshotName(backupId);
         HttpEntity<?> request = new HttpEntity<>(Map.of("indices", "zeebe-record*", "feature_states", List.of("none")));
         String url = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + repository + "/" + snapshot + "?wait_for_completion=true";
         try {
             ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.PUT, request, String.class);
             backupOperation.status = response.getStatusCode().value();
-            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Snapshot of the Zeebe records [" + snapshot + "] in the repository ["
+            operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Snapshot of the Zeebe records [" + snapshot + "] in the repository ["
                     + repository + "] response: " + response.getStatusCode().value() + " [" + response.getBody() + "]");
             String state = snapshotState(response.getBody());
             if (state != null && !"SUCCESS".equals(state)) {
                 backupOperation.status = 500;
                 backupOperation.title = "Snapshot of the Zeebe records " + snapshot + " is " + state;
                 backupOperation.message = "Url[" + url + "] " + response.getBody();
-                operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, backupOperation.title);
+                operationLog.error(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, backupOperation.title);
             }
         } catch (Exception e) {
             logger.error("Exception in the snapshot of the Zeebe records", e);
 
             backupOperation.title = e.getMessage();
-            backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + url + "]" + e.getMessage();
-            operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Error during the snapshot of the Zeebe records " + e.getMessage());
+            backupOperation.message = "Component[" + BackupComponentInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + url + "]" + e.getMessage();
+            operationLog.error(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Error during the snapshot of the Zeebe records " + e.getMessage());
         }
         return backupOperation;
-    }
-
-    /**
-     * @return the state of the snapshot in the answer of the creation (wait_for_completion=true), null if there is none
-     */
-    private static String snapshotState(String body) {
-        if (body == null) {
-            return null;
-        }
-        try {
-            JsonNode state = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body).path("snapshot").path("state");
-            return state.isMissingNode() ? null : state.asText();
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     /**
@@ -474,7 +599,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     public BackupOperation waitZeebeRecord(Long backupId, OperationLog operationLog) {
         BackupOperation backupOperation = new BackupOperation();
 
-        String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/"
+        String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + repositories.zeebeRecord().getValueString() + "/"
                 + zeebeRecordSnapshotName(backupId);
         boolean written = false;
         int timeToWait = 100;
@@ -509,7 +634,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
                 logger.error("Exception in the wait of the snapshot of the Zeebe records", e);
                 backupOperation.status = 400;
                 backupOperation.title = e.getMessage();
-                backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + urlComplete + "]" + e.getMessage();
+                backupOperation.message = "Component[" + BackupComponentInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + urlComplete + "]" + e.getMessage();
 
                 return backupOperation;
             }
@@ -535,7 +660,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
                         backupIsFinished = false;
                     }
                     if (!written) {
-                        operationLog.addSnapshotName(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, snapshotName);
+                        operationLog.addSnapshotName(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, snapshotName);
                     }
                 }
             }
@@ -577,7 +702,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
                     backupInfo = new BackupInfo();
                     backupInfo.backupId = snapshotBackupId;
                     backupInfo.status = BackupInfo.Status.COMPLETED;
-                    backupInfo.components.add(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE);
+                    backupInfo.components.add(BackupComponentInt.COMPONENT.SECONDARYSTORAGE);
                     backupInfo.backupTime = start;
                     backups.put(snapshotBackupId, backupInfo);
                 } else if (start.isBefore(backupInfo.backupTime)) {
@@ -591,13 +716,17 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
             return listBackups;
         } catch (Exception e) {
             logger.error("Can't call [{}] error {}", urlComplete, e);
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No Connection to ElasticSearch", "Error url[" + urlComplete + "] : " + e.getMessage());
+            // The snapshot repository does not exist: the user must configure the platform
+            String missingRepository = SnapshotRepositoryError.detect(e.getMessage());
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.BACKUP_LIST, "No Connection to ElasticSearch",
+                    missingRepository != null ? SnapshotRepositoryError.message(missingRepository)
+                            : "Error url[" + urlComplete + "] : " + e.getMessage());
         }
     }
 
     @Override
     public String getUrlListBackup() {
-        return blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/_all";
+        return blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + repositories.zeebeRecord().getValueString() + "/_all";
     }
 
     /* ******************************************************************** */
@@ -616,8 +745,8 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
      */
     public PartitionSequencesInfo getZeebeRecordsInfo() throws OperationException {
         String uri = "/zeebe-record*/_search";
-        String dataOption = "" // EOL
-                + "{\"size\": 0, " // EOL
+        // EOL
+        String dataOption = "{\"size\": 0, " // EOL
                 + " \"aggs\": "// EOL
                 + "  {\"value_types\": " // EOL
                 + "   {\"terms\": {\"field\": \"valueType\",\"size\": 20}," // EOL
@@ -646,19 +775,12 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
 
         ResponseEntity<JsonNode> response = restTemplate.postForEntity(urlComplete, entity, JsonNode.class);
         */
-            WebClient webClient = WebClient.builder()
-                    .baseUrl(blueberryConfig.getElasticsearchUrl())
-                    .build();
-
-            Mono<JsonNode> response = webClient.post()
-                    .uri(uri)  // relative path
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(dataOption) // request body
-                    .retrieve()
-                    .bodyToMono(JsonNode.class);
-
-            // Block here just for demo (otherwise you’d stay reactive)
-            JsonNode jsonResponse = response.block();
+            // The RestTemplate of Blueberry reads the Jackson 2 JsonNode (see RestTemplateConfig). The WebClient of Spring 7 reads Jackson 3 only:
+            // "Type definition error: [simple type, class com.fasterxml.jackson.databind.JsonNode]"
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<JsonNode> response = restTemplate.postForEntity(blueberryConfig.getElasticsearchUrl() + uri, new HttpEntity<>(dataOption, headers), JsonNode.class);
+            JsonNode jsonResponse = response.getBody();
 
             PartitionSequencesInfo partitionSequencesPerType = new PartitionSequencesInfo();
             JsonNode buckets = jsonResponse.path("aggregations").path("value_types").path("buckets");
@@ -693,8 +815,8 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
             }
             return partitionSequencesPerType;
         } catch (Exception e) {
-            logger.error("Can't call [{}] error {}",  blueberryConfig.getElasticsearchUrl() + uri, e);
-            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.ZEEBERECORDS_INFO, "No Connection to ElasticSearch", "Error url[" +  blueberryConfig.getElasticsearchUrl() + uri + "] : " + e.getMessage());
+            logger.error("Can't call [{}] error {}", blueberryConfig.getElasticsearchUrl() + uri, e);
+            throw OperationException.getInstanceFromCode(OperationException.BLUEBERRYERRORCODE.ZEEBERECORDS_INFO, "No Connection to ElasticSearch", "Error url[" + blueberryConfig.getElasticsearchUrl() + uri + "] : " + e.getMessage());
 
         }
     }
@@ -702,9 +824,6 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
 
     //  curl -o optimize-import-position.json --location 'http://<opensearchHost>:<opensearchPort>/optimize-position-based-import-index*/_search?size=100&pretty=true'
     // Operate and Tasklist import positions are no longer checked: since 8.10 they are in the RDBMS.
-
-    public enum COMPONENT_IMPORTER {OPTIMIZE}
-
 
     /**
      * get <Component> sequence. Same as ZeebeRecord, but stored in a in a different way
@@ -725,18 +844,8 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
         }
         try {
 
-            WebClient webClient = WebClient.builder()
-                    .baseUrl(blueberryConfig.getElasticsearchUrl())
-                    .build();
-
-            // relative path of the component index, the baseUrl is the Elasticsearch url
-            Mono<JsonNode> response = webClient.get()
-                    .uri(urlComplete.substring(blueberryConfig.getElasticsearchUrl().length()))
-                    .retrieve()
-                    .bodyToMono(JsonNode.class);
-
-            // Block here just for demo (otherwise you’d stay reactive)
-            JsonNode jsonResponse = response.block();
+            // The RestTemplate of Blueberry reads the Jackson 2 JsonNode (see RestTemplateConfig)
+            JsonNode jsonResponse = restTemplate.getForEntity(urlComplete, JsonNode.class).getBody();
 
             PartitionSequencesInfo partitionSequencesPerType = new PartitionSequencesInfo();
 
@@ -771,11 +880,19 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     }
 
 
+    public enum COMPONENT_IMPORTER {OPTIMIZE}
+
+
     /* ******************************************************************** */
     /*                                                                      */
     /*  PartitionSequencesInfo                                              */
     /*                                                                      */
     /* ******************************************************************** */
+
+    public record SequenceInfo(
+            long sequence,
+            long position) {
+    }
 
     public class PartitionSequencesInfo {
         public Map<Integer, SequencesPerType> record = new HashMap<>();
@@ -824,14 +941,13 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
         }
     }
 
-
     /* ******************************************************************** */
     /*                                                                      */
     /*  SequencesPerType                                                    */
     /*                                                                      */
     /* ******************************************************************** */
     public class SequencesPerType {
-        private Map<String, SequenceInfo> infoType = new HashMap<>();
+        private final Map<String, SequenceInfo> infoType = new HashMap<>();
 
         public void addSequence(String typeSequence, Long sequence, Long position) {
             infoType.put(typeSequence, new SequenceInfo(sequence, position));
@@ -843,8 +959,5 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
         }
     }
 
-    public record SequenceInfo(
-            long sequence,
-            long position) {}
-
 }
+

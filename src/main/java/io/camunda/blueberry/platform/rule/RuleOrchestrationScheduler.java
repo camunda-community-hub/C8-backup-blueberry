@@ -1,6 +1,7 @@
 package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.platform.componentconfig.Parameter;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -135,7 +136,8 @@ public class RuleOrchestrationScheduler implements Rule {
     }
 
     private String originOf(OrchestrationParameter.ParameterDefinition definition) {
-        OrchestrationParameter.Parameter parameter = orchestrationParameter.getParameter(definition);
+        Parameter parameter = orchestrationParameter.getParameter(definition);
         return parameter == null ? "config" : parameter.getOriginLabel();
     }
 }
+

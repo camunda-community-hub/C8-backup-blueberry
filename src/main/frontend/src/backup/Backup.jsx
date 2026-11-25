@@ -34,8 +34,7 @@ class Backup extends React.Component {
             currentBackup: {statusBackup: ""},
             backupPhases: [],
             backupConfiguration: {mode: "", schedule: "", retentionWindow: ""},
-            docsBackupUrl: "",
-            camundaMinorVersion: ""
+            docsBackupUrl: ""
 
         };
 
@@ -71,6 +70,12 @@ class Backup extends React.Component {
                 <div className="row" style={{width: "100%"}}>
                     <div className="col-md-10">
                         <h1 className="title"><DatabaseUp/> Backup</h1>
+                        <p className="text-muted" style={{fontSize: "0.85rem"}}>
+                            Latest documentation:{" "}
+                            <a href="https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/backup-and-restore/" target="_blank" rel="noreferrer">Backup and restore</a>
+                            {" · "}
+                            <a href="https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/" target="_blank" rel="noreferrer">Backup with Elasticsearch</a>
+                        </p>
                         <InlineNotification kind="info" hideCloseButton="true" lowContrast="false">
                             Last backup are listed.
                         </InlineNotification>
@@ -164,7 +169,7 @@ class Backup extends React.Component {
 
                 {this.state.backupPhases.length > 0 &&
                     <Card style={{marginTop: "16px"}}>
-                        <Card.Header>Backup phases (Camunda version profile)</Card.Header>
+                        <Card.Header>Backup steps</Card.Header>
                         <Card.Body>
                             <ul style={{listStyle: "none", paddingLeft: 0}}>
                                 {this.state.backupPhases.map((p, index) =>
@@ -175,7 +180,6 @@ class Backup extends React.Component {
                             {this.state.docsBackupUrl &&
                                 <p className="text-muted" style={{marginTop: "8px", marginBottom: 0}}>
                                     <a href={this.state.docsBackupUrl} target="_blank" rel="noreferrer">Official backup guide</a>
-                                    {" "}(Camunda {this.state.camundaMinorVersion})
                                 </p>}
                         </Card.Body>
                     </Card>}
@@ -326,8 +330,7 @@ class Backup extends React.Component {
                 const data = httpPayload.getData();
                 this.setState({
                     backupPhases: data.phases || [],
-                    docsBackupUrl: data.docsBackupUrl || "",
-                    camundaMinorVersion: data.camundaMinorVersion || ""
+                    docsBackupUrl: data.docsBackupUrl || ""
                 });
             }
         });

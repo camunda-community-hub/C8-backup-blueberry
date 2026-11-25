@@ -64,6 +64,13 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- Kubernetes: the restore stops Optimize (scale down) -->
+        <dependency>
+            <groupId>io.fabric8</groupId>
+            <artifactId>kubernetes-client</artifactId>
+            <version>7.1.0</version>
+        </dependency>
+
 
         <!-- The Camunda Spring Boot starter: the CamundaClient bean (camunda.client.* properties).
              Since 8.8 it replaces spring-boot-starter-camunda-sdk, which does not exist for 8.10. -->
