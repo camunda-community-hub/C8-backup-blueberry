@@ -2,6 +2,7 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.OptimizeConnect;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestTemplate;
 
@@ -38,14 +39,69 @@ class RuleOptimizePresentTest {
         };
     }
 
+    /**
+     * @param answers true: Elasticsearch answers on its URL (the cluster)
+     * @param enabled blueberry.elasticsearch.enabled (the configuration)
+     */
+    private static ElasticSearchConnect elasticsearch(BlueberryConfig config, boolean answers, boolean enabled) {
+        return new ElasticSearchConnect(config, null, null, null) {
+            @Override
+            public boolean isConnected() {
+                return answers;
+            }
+
+            @Override
+            public boolean isActive() {
+                return enabled;
+            }
+        };
+    }
+
     private static Rule.RuleInfo check(BlueberryConfig config, boolean answers) {
-        return new RuleOptimizePresent(config, optimize(config, answers)).check();
+        // Elasticsearch is there
+        return new RuleOptimizePresent(config, optimize(config, answers), elasticsearch(config, true, true)).check();
+    }
+
+    private static Rule.RuleInfo check(BlueberryConfig config, boolean optimizeAnswers, boolean elasticsearchAnswers, boolean elasticsearchEnabled) {
+        return new RuleOptimizePresent(config, optimize(config, optimizeAnswers), elasticsearch(config, elasticsearchAnswers, elasticsearchEnabled)).check();
     }
 
     @Test
     void theRuleIsCalledOptimisePresent() throws Exception {
         BlueberryConfig config = config(true, "http://o:8092", "http://z:9600");
-        assertEquals("Optimise is present", new RuleOptimizePresent(config, optimize(config, true)).getName());
+        assertEquals("Optimise is present", new RuleOptimizePresent(config, optimize(config, true), elasticsearch(config, true, true)).getName());
+    }
+
+    @Test
+    void optimizeNeedsElasticsearch() throws Exception {
+        BlueberryConfig config = config(true, "http://o:8092", "http://z:9600");
+
+        // Elasticsearch answers: a correct verification
+        Rule.RuleInfo present = check(config, true, true, false);
+        assertEquals(Rule.RuleStatus.CORRECT, present.getStatus());
+        assertTrue(present.getListVerifications().stream().anyMatch(v -> v.action().startsWith("Elasticsearch (needed by Optimize) answers")
+                && v.actionStatus() == Rule.RuleStatus.CORRECT));
+
+        // Elasticsearch is configured but does not answer: failed
+        Rule.RuleInfo notAnswering = check(config, true, false, true);
+        assertEquals(Rule.RuleStatus.FAILED, notAnswering.getStatus());
+        assertTrue(notAnswering.getListVerifications().stream().anyMatch(v -> v.action().startsWith("Elasticsearch is enabled [true] (config) but does not answer")));
+
+        // Elasticsearch is not there at all: failed
+        Rule.RuleInfo absent = check(config, true, false, false);
+        assertEquals(Rule.RuleStatus.FAILED, absent.getStatus());
+        assertTrue(absent.getListVerifications().stream().anyMatch(v -> v.action().startsWith("Elasticsearch is not present")
+                && v.actionStatus() == Rule.RuleStatus.FAILED));
+    }
+
+    @Test
+    void withoutOptimizeElasticsearchIsNotChecked() throws Exception {
+        BlueberryConfig config = config(false, "http://o:8092", "http://z:9600");
+
+        Rule.RuleInfo info = check(config, false, false, false);
+
+        assertEquals(Rule.RuleStatus.CORRECT, info.getStatus());
+        assertTrue(info.getListVerifications().stream().noneMatch(v -> v.action() != null && v.action().contains("Elasticsearch")));
     }
 
     @Test

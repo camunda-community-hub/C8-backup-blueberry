@@ -2,6 +2,7 @@ package io.camunda.blueberry.operation.backup;
 
 
 import io.camunda.blueberry.connect.*;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.exception.BackupException;
@@ -26,14 +27,16 @@ public class BackupManager {
     Logger logger = LoggerFactory.getLogger(BackupManager.class);
     final OptimizeConnect optimizeConnect;
     final ZeebeConnect zeebeConnect;
+    final ElasticSearchConnect elasticSearchConnect;
     private BackupJob backupJob;
 
     List<BackupComponentInt> listBackupComponents;
 
     public BackupManager(OptimizeConnect optimizeConnect,
                          ZeebeConnect zeebeConnect, SecondaryStorageFactory secondaryStorageFactory,
-                         List<BackupComponentInt> listBackupComponents) {
+                         ElasticSearchConnect elasticSearchConnect, List<BackupComponentInt> listBackupComponents) {
         this.optimizeConnect = optimizeConnect;
+        this.elasticSearchConnect = elasticSearchConnect;
         this.zeebeConnect = zeebeConnect;
         this.secondaryStorageFactory = secondaryStorageFactory;
         this.listBackupComponents = listBackupComponents;
@@ -44,7 +47,7 @@ public class BackupManager {
         if (backupJob != null && backupJob.getJobStatus() == BackupJob.JOBSTATUS.INPROGRESS)
             throw new BackupException(null, 400, "Job Already in progress", "In Progress[" + backupJob.getBackupId() + "]", backupJob.getBackupId());
         // start a backup, asynchronously
-        backupJob = new BackupJob(optimizeConnect, zeebeConnect, secondaryStorageFactory, new OperationLog());
+        backupJob = new BackupJob(optimizeConnect, zeebeConnect, secondaryStorageFactory, elasticSearchConnect, new OperationLog());
         Long backupId=null;
         BACKUPIDPOLICY backupPolicy = backupParameter.getBackupPolicy();
         switch (backupPolicy) {

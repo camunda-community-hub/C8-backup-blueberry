@@ -28,9 +28,9 @@ class OperationLogTest {
     @Test
     void messagesOfTheSameStepAndComponentAreMergedWithTheHighestType() {
         OperationLog log = new OperationLog();
-        log.addInMessage(message(OperationLog.Type.INFO, "one"));
-        log.addInMessage(message(OperationLog.Type.ERROR, "two"));
-        log.addInMessage(message(OperationLog.Type.WARNING, "three"));
+        log.mergeMessage(message(OperationLog.Type.INFO, "one"));
+        log.mergeMessage(message(OperationLog.Type.ERROR, "two"));
+        log.mergeMessage(message(OperationLog.Type.WARNING, "three"));
 
         assertEquals(1, log.getMessages().size());
         OperationLog.Message merged = log.getMessages().get(0);

@@ -90,7 +90,7 @@ public class RestoreRestController {
             OperationLog operationLog = job.getOperationLog();
             if (operationLog != null) {
                 monitorStatus.step = operationLog.getCurrentStep();
-                monitorStatus.totalNumberOfSteps = operationLog.getTotalNumberOfSteps();
+                monitorStatus.totalSteps = operationLog.getTotalNumberOfSteps();
                 monitorStatus.operationName = operationLog.getOperationName();
                 monitorStatus.stepName = operationLog.getStepName();
                 monitorStatus.messages = operationLog.getMessages();
@@ -131,7 +131,7 @@ public class RestoreRestController {
         @JsonProperty
         int step;
         @JsonProperty
-        int totalNumberOfSteps;
+        int totalSteps;
         @JsonProperty
         String operationName;
         @JsonProperty

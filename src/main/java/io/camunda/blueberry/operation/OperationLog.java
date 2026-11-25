@@ -14,6 +14,7 @@ public class OperationLog {
     private int totalNumberOfSteps;
     private int currentStep;
     private String stepName;
+    private String documentationLink;
     private long operationBeginTime;
 
     private CamundaApplicationInt.COMPONENT component;
@@ -34,28 +35,26 @@ public class OperationLog {
         this.operationBeginTime = System.currentTimeMillis();
         info(component, "Start operation [" + operationName + "] with " + totalNumberOfSteps + " steps");
     }
-
+    public void endOperation() {
+        info(null, "Operation[" + operationName + "] : Step finished in " + (System.currentTimeMillis() - operationBeginTime) + " ms");
+    }
     /**
      * a new step is started
      *
      * @param stepName name of the step
      */
-    public void operationStep(CamundaApplicationInt.COMPONENT component, String stepName) {
+    public void startOperationStep(CamundaApplicationInt.COMPONENT component, String stepName,
+                                   String stepLabel,
+                                   String documentationLink) {
         this.currentStep++;
         this.stepName = stepName;
-        info(null, "Operation[" + operationName + "], Step Started");
+        this.documentationLink = documentationLink;
+        info(null,  stepLabel);
     }
 
-    public void operationStep(CamundaApplicationInt.COMPONENT component, int forceStep, String stepName) {
-        this.component = component;
-        this.currentStep = forceStep;
-        this.stepName = stepName;
-        info(component, "Operation[" + operationName + "], Step Started");
-    }
 
-    public void endOperation() {
-        info(null, "Operation[" + operationName + "] : Step finished in " + (System.currentTimeMillis() - operationBeginTime) + " ms");
-    }
+
+
 
     public void info(CamundaApplicationInt.COMPONENT component, String message) {
         if (component==null) {
@@ -69,7 +68,9 @@ public class OperationLog {
         msg.component = component;
         msg.date = new Date();
         msg.step = currentStep;
-        addInMessage(msg);
+        msg.stepName = stepName;
+        msg.documentationLink = documentationLink;
+        mergeMessage(msg);
     }
 
     public void warning(CamundaApplicationInt.COMPONENT component, String message) {
@@ -80,7 +81,8 @@ public class OperationLog {
         msg.component = component;
         msg.date = new Date();
         msg.step = currentStep;
-        addInMessage(msg);
+        msg.stepName = stepName;
+        mergeMessage(msg);
     }
 
     public void error(CamundaApplicationInt.COMPONENT component, String message) {
@@ -91,7 +93,8 @@ public class OperationLog {
         msg.component = component;
         msg.date = new Date();
         msg.step = currentStep;
-        addInMessage(msg);
+        msg.stepName = stepName;
+        mergeMessage(msg);
     }
 
     public List<Message> getMessages() {
@@ -135,16 +138,17 @@ public class OperationLog {
         public CamundaApplicationInt.COMPONENT component;
         public Date date;
         public int step;
+        public String stepName;
+        public String documentationLink;
     }
-
-    public void addInMessage( Message message) {
+/** if the message is on the same step as the previous step, then we merge them **/
+    public void mergeMessage(Message message) {
         if (listMessages.isEmpty()) {
             listMessages.add(message);
             return;
         }
         Message previous = listMessages.getLast();
-        if (previous.step != message.step
-        || previous.component != message.component) {
+        if (previous.step != message.step) {
             listMessages.add(message);
             return;
         }

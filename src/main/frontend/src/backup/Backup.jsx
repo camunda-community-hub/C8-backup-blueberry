@@ -26,7 +26,8 @@ class Backup extends React.Component {
 
         this.state = {
             display: {loading: false},
-            parameter: {backupId: '',  backupPolicy: "EXPLICIT" },
+            parameter: {backupId: '',  backupPolicy: "NEXTID" },
+            policyChosenByUser: false,
             resultCall: {status: 200, error: "", message: "", component: ""},
             listBackups: [],
             listUrlsBackup: [],
@@ -102,6 +103,8 @@ class Backup extends React.Component {
                                     selectedItem={selectedPolicyItem}
                                     onChange={({ selectedItem }) =>
                                         this.setState((prevState) => ({
+                                            // from now on the choice of the user is kept
+                                            policyChosenByUser: true,
                                             parameter: {
                                                 ...prevState.parameter,
                                                 backupPolicy: selectedItem.id,
@@ -141,7 +144,7 @@ class Backup extends React.Component {
                 </div>
 
                 <div className="row" style={{marginTop: "10px"}}>
-                    <div className="col-md-6">
+                    <div className="col-md-12">
                         {this.renderCurrentBackupCard()}
                     </div>
                 </div>
@@ -295,7 +298,7 @@ class Backup extends React.Component {
                         </tr>
                         <tr>
                             <td>Advancement</td>
-                            <td>{cb.step != null ? cb.step : "—"} / {cb.totalNumberOfSteps != null ? cb.totalNumberOfSteps : "—"}</td>
+                            <td>{cb.step != null ? cb.step : "—"} / {cb.totalSteps != null ? cb.totalSteps : "—"}</td>
                         </tr>
                         <tr>
                             <td>Current operation</td>
@@ -311,7 +314,7 @@ class Backup extends React.Component {
                         </tr>
                         </tbody>
                     </table>
-                    {renderOperationLogMessages(cb.messages)}
+                    {renderOperationLogMessages(cb.messages, cb.totalSteps)}
                 </Card.Body>
             </Card>
         );
@@ -412,7 +415,29 @@ class Backup extends React.Component {
                     listBackups: httpPayload.getData().listBackups,
                     listUrlsBackup: httpPayload.getData().listUrlsBackup
                 })
+            // The default type of backup follows the last backup, until the user chooses one
+            const backups = httpPayload.getData().listBackups;
+            this.setState((previous) => previous.policyChosenByUser ? null : {
+                parameter: {...previous.parameter, backupPolicy: this.defaultBackupPolicy(backups)}
+            });
         }
+    }
+
+    /**
+     * The default type of backup: "Time backup" when the last backup id looks like a date (yyyyMMddHHmm, for example
+     * 202611240020), else "Next id"
+     */
+    defaultBackupPolicy(backups) {
+        let lastId = null;
+        (backups || []).forEach((backup) => {
+            const id = Number(backup.backupId);
+            if (!isNaN(id) && (lastId === null || id > lastId)) {
+                lastId = id;
+            }
+        });
+        const looksLikeDate = lastId !== null
+            && /^20\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])([01]\d|2[0-3])[0-5]\d$/.test(String(lastId));
+        return looksLikeDate ? "TIMEBACKUP" : "NEXTID";
     }
 
 

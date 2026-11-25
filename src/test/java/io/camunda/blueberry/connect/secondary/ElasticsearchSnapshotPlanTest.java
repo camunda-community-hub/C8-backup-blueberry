@@ -57,9 +57,18 @@ class ElasticsearchSnapshotPlanTest {
     }
 
     @Test
-    void theZeebeRecordsAreRequired() {
+    void theZeebeRecordsAreOptionalWithoutOptimize() throws Exception {
+        // the Zeebe records are in the backup only for Optimize
+        List<ElasticsearchSnapshotPlan.Planned> plan = ElasticsearchSnapshotPlan.plan(7,
+                Map.of("repo", List.of("camunda_webapps_7_8.10.0_part_1_of_1")));
+
+        assertEquals(List.of("camunda_webapps_7_8.10.0_part_1_of_1"), plan.stream().map(ElasticsearchSnapshotPlan.Planned::name).toList());
+    }
+
+    @Test
+    void theZeebeRecordsAreRequiredWithOptimize() {
         assertThrows(OperationException.class, () -> ElasticsearchSnapshotPlan.plan(7,
-                Map.of("repo", List.of("camunda_webapps_7_8.10.0_part_1_of_1"))));
+                Map.of("repo", List.of("camunda_webapps_7_8.10.0_part_1_of_1", "camunda_optimize_7_8.10.0_part_1_of_1"))));
     }
 
     @Test

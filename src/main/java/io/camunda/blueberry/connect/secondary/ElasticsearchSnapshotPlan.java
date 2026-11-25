@@ -17,8 +17,10 @@ import java.util.regex.Pattern;
  * <pre>
  * camunda_webapps_1748937221_8.8.0_part_1_of_5 ... part_5_of_5   Operate and Tasklist (the history backup). Required
  * camunda_optimize_1748937221_8.8.0_part_1_of_2 ... part_2_of_2  Optimize. Optional (Optimize may not be deployed)
- * camunda_zeebe_records_backup_1748937221                       The Zeebe records. Required. Blueberry names it with the
- *                                                               backup ID only (1748937221): both are accepted
+ * camunda_zeebe_records_backup_1748937221                       The Zeebe records. Only for Optimize (Optimize reads them):
+ *                                                               required when the backup has the snapshots of Optimize, else
+ *                                                               optional. Older Blueberry versions named it with the backup ID
+ *                                                               only (1748937221): both are accepted
  * </pre>
  * Each snapshot is restored on its own, one after the other.
  */
@@ -77,9 +79,10 @@ public final class ElasticsearchSnapshotPlan {
                     + "It is the history backup: POST /v2/backups/history. Searched in the repositories "
                     + namesPerRepository.keySet() + ".");
         }
-        if (records.isEmpty()) {
-            throw missing("No snapshot [" + backupId + "] or [camunda_zeebe_records_backup_" + backupId
-                    + "] was found (the Zeebe records). Searched in the repositories " + namesPerRepository.keySet() + ".");
+        // The Zeebe records are exported in Elasticsearch for Optimize: they are in the backup only when Optimize is active
+        if (records.isEmpty() && !optimizeParts.isEmpty()) {
+            throw missing("The backup has the snapshots of Optimize, but no snapshot [" + backupId + "] or [camunda_zeebe_records_backup_" + backupId
+                    + "] (the Zeebe records, which Optimize reads). Searched in the repositories " + namesPerRepository.keySet() + ".");
         }
         requireComplete("Operate and Tasklist", webappsParts);
         if (!optimizeParts.isEmpty()) {

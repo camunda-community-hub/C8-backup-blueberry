@@ -128,7 +128,7 @@ public class BackupRestController {
             OperationLog operationLog = backupJob.getOperationLog();
             if (operationLog != null) {
                 monitorStatus.step = operationLog.getCurrentStep();
-                monitorStatus.totalNumberOfSteps = operationLog.getTotalNumberOfSteps();
+                monitorStatus.totalSteps = operationLog.getTotalNumberOfSteps();
                 monitorStatus.operationName = operationLog.getOperationName();
                 monitorStatus.stepName = operationLog.getStepName();
 
@@ -266,7 +266,7 @@ public class BackupRestController {
         @JsonProperty
         int step;
         @JsonProperty
-        int totalNumberOfSteps;
+        int totalSteps;
         @JsonProperty
         String operationName;
         @JsonProperty

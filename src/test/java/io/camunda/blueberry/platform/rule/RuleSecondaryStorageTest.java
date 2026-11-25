@@ -107,7 +107,7 @@ class RuleSecondaryStorageTest {
         Rule.RuleInfo info = run(Map.of(), ENV_REPOSITORY, elasticsearch, false);
 
         assertEquals(Rule.RuleStatus.CORRECT, info.getStatus());
-        assertTrue(info.getListVerifications().stream().anyMatch(v -> v.action().equals("Snapshot repository of the history backup: [camunda] (actuator)")
+        assertTrue(info.getListVerifications().stream().anyMatch(v -> v.action().equals("Check existence of the Snapshot repository:[camunda] (actuator)")
                 && v.actionStatus() == Rule.RuleStatus.CORRECT));
         assertTrue(info.getListVerifications().stream().anyMatch(v -> v.action().contains("is created in Elasticsearch")
                 && v.actionStatus() == Rule.RuleStatus.CORRECT));
@@ -147,7 +147,8 @@ class RuleSecondaryStorageTest {
         Rule.RuleInfo configure = run(Map.of(), ENV_REPOSITORY, configureEs, true);
         assertEquals(Rule.RuleStatus.CORRECT, configure.getStatus());
         assertTrue(configure.getListVerifications().stream().anyMatch(v -> v.action().contains("is not created") && v.actionStatus() == Rule.RuleStatus.INPROGRESS));
-        assertTrue(configure.getListVerifications().stream().anyMatch(v -> v.action().startsWith("Create the snapshot repository") && v.actionStatus() == Rule.RuleStatus.CORRECT));
+        assertTrue(configure.getListVerifications().stream().anyMatch(v -> v.activity() != null && v.activity().contains("is created in Elasticsearch")
+                && v.actionStatus() == Rule.RuleStatus.DONEWITHSUCCESS));
         assertEquals(List.of("camunda"), configureEs.created);
     }
 

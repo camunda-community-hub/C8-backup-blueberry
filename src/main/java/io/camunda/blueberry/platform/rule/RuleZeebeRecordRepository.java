@@ -99,7 +99,7 @@ public class RuleZeebeRecordRepository implements Rule {
                         orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
                         blueberryConfig.getZeebeRecordContainerBasePath());
                 if (operationResult.success) {
-                    ruleInfo.addActivity("Repository is created in ElasticSearch", RuleStatus.CORRECT, operationResult.command);
+                    ruleInfo.addActivity("Repository is created in ElasticSearch", RuleStatus.DONEWITHSUCCESS, operationResult.command);
                 } else {
                     ruleInfo.addError("Error when creating the repository in ElasticSearch :" + operationResult.details);
                     ruleInfo.setStatus(RuleStatus.FAILED);

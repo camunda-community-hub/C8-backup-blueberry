@@ -315,6 +315,10 @@ class Configuration extends React.Component {
             case "INFO":
                 return <Tag type="cyan">Info</Tag>
 
+            case "DONEWITHSUCCESS":
+                // an action done by the Configure, with success: high-contrast: a color of its own, not the green of Correct
+                return <Tag type="high-contrast">Done</Tag>
+
 
             default:
                 return <Tag type="gray">Unknown</Tag>;

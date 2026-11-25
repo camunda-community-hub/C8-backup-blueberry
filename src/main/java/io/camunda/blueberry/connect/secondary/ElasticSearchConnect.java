@@ -27,6 +27,8 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class ElasticSearchConnect implements SecondaryStorageInt {
@@ -141,6 +143,13 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
             logger.error("Can't access ElasticSearch url[{}] {} ", url, e);
             return false;
         }
+    }
+
+    /**
+     * Is Elasticsearch there? The cluster first (it answers on its URL), else the configuration (blueberry.elasticsearch.enabled)
+     */
+    public boolean isPresent() {
+        return isConnected() || isActive();
     }
 
     /**
@@ -269,49 +278,90 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
         return CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE;
     }
 
-    /***
-     *      * curl -X PUT http://localhost:9200/_snapshot/zeeberecordrepository/12 -H 'Content-Type: application/json'   \
-     *      * -d '{ "indices": "zeebe-record*", "feature_states": ["none"]}'
-     * @param backupId
-     * @param operationLog
-     * @return
-     * @throws BackupException
+    /**
+     * Prefix of the name of the snapshot of the Zeebe records (documentation of the backup, step 6):
+     * camunda_zeebe_records_backup_{backupId}
      */
-    @Override
-    public BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
-        String zeebeEsRepository = blueberryConfig.getZeebeRecordRepository();
-        CamundaApplicationInt.BackupOperation backupOperation = new CamundaApplicationInt.BackupOperation();
+    public static final String ZEEBE_RECORD_SNAPSHOT_PREFIX = "camunda_zeebe_records_backup_";
 
-        // Procedure of the documentation, steps 2 and 4: the history backup (the indices of Operate and Tasklist),
-        // which must be complete before the snapshot of the Zeebe records (step 6)
-        BackupOperation historyBackup = historyBackup(backupId, operationLog);
-        if (!historyBackup.isOk()) {
-            return historyBackup;
-        }
+    /**
+     * The snapshot of the Zeebe records: with the prefix of the documentation, or with the backup id only (the older name of Blueberry)
+     */
+    private static final Pattern ZEEBE_RECORD_SNAPSHOT = Pattern.compile("^(?:" + ZEEBE_RECORD_SNAPSHOT_PREFIX + ")?(\\d+)$");
 
-        HttpEntity<?> zeebeEsBackupRequest = new HttpEntity<>(Map.of("indices", "zeebe-record*", "feature_states", List.of("none")));
-        String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/" + backupId;
-        try {
-            ResponseEntity<String> zeebeEsBackupResponse = restTemplate.exchange(urlComplete, HttpMethod.PUT, zeebeEsBackupRequest, String.class);
-            backupOperation.status = zeebeEsBackupResponse.getStatusCode().value();
+    /**
+     * The snapshots of the history backup (Operate, Tasklist): camunda_webapps_{backupId}_{version}_part_k_of_n
+     */
+    private static final Pattern WEBAPPS_SNAPSHOT = Pattern.compile("^camunda_webapps_(\\d+)_.+_part_\\d+_of_\\d+$");
 
-            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Start Zeebe ES Backup on [" + zeebeEsRepository + "] response: " + zeebeEsBackupResponse.getStatusCode().value() + " [" + zeebeEsBackupResponse.getBody() + "]");
-        } catch (Exception e) {
-            logger.error("Exception in esBackup", e);
-
-            backupOperation.title = e.getMessage();
-            backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + urlComplete + "]" + e.getMessage();
-            operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Error during backup ZeebeRecord " + e.getMessage());
-        }
-        return backupOperation;
+    static String zeebeRecordSnapshotName(long backupId) {
+        return ZEEBE_RECORD_SNAPSHOT_PREFIX + backupId;
     }
 
     /**
-     * History backup of the web applications (Operate, Tasklist) with the REST API of the cluster:
-     * POST /v2/backups/history, then GET /v2/backups/history/{backupId} until the state is COMPLETED.
-     * Only for Elasticsearch and OpenSearch.
+     * @return the backup id of a snapshot of the Zeebe records, null if the snapshot is something else (the snapshots of Operate,
+     * Tasklist or Optimize can be in the same repository)
      */
-    private BackupOperation historyBackup(Long backupId, OperationLog operationLog) {
+    static Long zeebeRecordBackupId(String snapshotName) {
+        if (snapshotName == null) {
+            return null;
+        }
+        Matcher matcher = ZEEBE_RECORD_SNAPSHOT.matcher(snapshotName);
+        return matcher.matches() ? Long.valueOf(matcher.group(1)) : null;
+    }
+
+    /**
+     * @return the backup id of a snapshot of the secondary storage: the history backup (webapps) or the Zeebe records. Null for the
+     * other snapshots (Optimize)
+     */
+    static Long secondaryStorageBackupId(String snapshotName) {
+        if (snapshotName == null) {
+            return null;
+        }
+        Matcher matcher = WEBAPPS_SNAPSHOT.matcher(snapshotName);
+        return matcher.matches() ? Long.valueOf(matcher.group(1)) : zeebeRecordBackupId(snapshotName);
+    }
+
+    /**
+     * The backup of the secondary storage, as the documentation of the backup (Elasticsearch / OpenSearch):
+     * <ol>
+     *     <li>step 2: start the history backup of the applications (Operate, Tasklist): {@link #backupApplication}</li>
+     *     <li>step 4: wait for the end of the history backup: {@link #waitBackupApplication}</li>
+     *     <li>step 6: snapshot of the Zeebe records: {@link #backupZeebeRecord}</li>
+     * </ol>
+     * The step 7 (wait for the snapshot of the Zeebe records) is {@link #waitBackup}.
+     */
+    @Override
+    public BackupOperation backup(Long backupId, OperationLog operationLog) throws BackupException {
+        BackupOperation application = backupApplication(backupId, operationLog);
+        if (!application.isOk()) {
+            return application;
+        }
+        application = waitBackupApplication(backupId, operationLog);
+        if (!application.isOk()) {
+            return application;
+        }
+        return backupZeebeRecord(backupId, operationLog);
+    }
+
+    /**
+     * Wait for the end of the backup of the secondary storage: the snapshot of the Zeebe records (step 7). The history backup is
+     * already complete (step 4)
+     */
+    @Override
+    public BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
+        return waitZeebeRecord(backupId, operationLog);
+    }
+
+    /**
+     * Step 2 of the documentation: start the history backup of the applications (Operate, Tasklist) with the REST API of the cluster
+     * <pre>
+     * curl -XPOST "$ORCHESTRATION_CLUSTER_API/backups/history" -H "Content-Type: application/json" -d "{\"backupId\": $BACKUP_ID}"
+     * </pre>
+     * Only for Elasticsearch and OpenSearch. The cluster must know the snapshot repository
+     * (camunda.data.secondary-storage.elasticsearch.backup.repository-name), else it answers 403.
+     */
+    public BackupOperation backupApplication(Long backupId, OperationLog operationLog) {
         BackupOperation backupOperation = new BackupOperation();
         ZeebeRestApi.RestResult start = zeebeRestApi.takeHistoryBackup(backupId);
         operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Start the history backup (Operate, Tasklist) " + backupId
@@ -320,9 +370,16 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
         if (!start.isSuccess()) {
             backupOperation.title = "History backup refused (status " + start.status() + ")";
             backupOperation.message = "POST " + zeebeRestApi.getBaseUrl() + "/backups/history answered " + start.status() + " " + start.raw();
-            return backupOperation;
         }
+        return backupOperation;
+    }
 
+    /**
+     * Step 4 of the documentation: wait for the end of the history backup, GET /v2/backups/history/{backupId} until the state is
+     * COMPLETED
+     */
+    public BackupOperation waitBackupApplication(Long backupId, OperationLog operationLog) {
+        BackupOperation backupOperation = new BackupOperation();
         int timeToWait = 500;
         for (int loop = 0; loop < 2000; loop++) {
             try {
@@ -361,18 +418,64 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     }
 
     /**
-     * Wait for the backup to finish. Wait for ever
-     *
-     * @param backupId
-     * @param operationLog
-     * @return
-     * @throws BackupException
+     * Step 6 of the documentation: the snapshot of the Zeebe records. It must run after the history backup is complete (step 4)
+     * <pre>
+     * curl -XPUT "$ELASTIC_ENDPOINT/_snapshot/$ELASTIC_SNAPSHOT_REPOSITORY/camunda_zeebe_records_backup_$BACKUP_ID?wait_for_completion=true" \
+     *   -H 'Content-Type: application/json' -d '{"indices": "zeebe-record*", "feature_states": ["none"]}'
+     * </pre>
      */
-    @Override
-    public BackupOperation waitBackup(Long backupId, OperationLog operationLog) throws BackupException {
-        CamundaApplicationInt.BackupOperation backupOperation = new CamundaApplicationInt.BackupOperation();
+    public BackupOperation backupZeebeRecord(Long backupId, OperationLog operationLog) {
+        BackupOperation backupOperation = new BackupOperation();
+        String repository = blueberryConfig.getZeebeRecordRepository();
+        String snapshot = zeebeRecordSnapshotName(backupId);
+        HttpEntity<?> request = new HttpEntity<>(Map.of("indices", "zeebe-record*", "feature_states", List.of("none")));
+        String url = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + repository + "/" + snapshot + "?wait_for_completion=true";
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.PUT, request, String.class);
+            backupOperation.status = response.getStatusCode().value();
+            operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Snapshot of the Zeebe records [" + snapshot + "] in the repository ["
+                    + repository + "] response: " + response.getStatusCode().value() + " [" + response.getBody() + "]");
+            String state = snapshotState(response.getBody());
+            if (state != null && !"SUCCESS".equals(state)) {
+                backupOperation.status = 500;
+                backupOperation.title = "Snapshot of the Zeebe records " + snapshot + " is " + state;
+                backupOperation.message = "Url[" + url + "] " + response.getBody();
+                operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, backupOperation.title);
+            }
+        } catch (Exception e) {
+            logger.error("Exception in the snapshot of the Zeebe records", e);
 
-        String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/" + backupId;
+            backupOperation.title = e.getMessage();
+            backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + url + "]" + e.getMessage();
+            operationLog.error(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Error during the snapshot of the Zeebe records " + e.getMessage());
+        }
+        return backupOperation;
+    }
+
+    /**
+     * @return the state of the snapshot in the answer of the creation (wait_for_completion=true), null if there is none
+     */
+    private static String snapshotState(String body) {
+        if (body == null) {
+            return null;
+        }
+        try {
+            JsonNode state = new com.fasterxml.jackson.databind.ObjectMapper().readTree(body).path("snapshot").path("state");
+            return state.isMissingNode() ? null : state.asText();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Step 7 of the documentation: wait for the end of the snapshot of the Zeebe records. GET /_snapshot/{repository}/{snapshot}
+     * until the state is SUCCESS
+     */
+    public BackupOperation waitZeebeRecord(Long backupId, OperationLog operationLog) {
+        BackupOperation backupOperation = new BackupOperation();
+
+        String urlComplete = blueberryConfig.getElasticsearchUrl() + "/_snapshot/" + blueberryConfig.getZeebeRecordRepository() + "/"
+                + zeebeRecordSnapshotName(backupId);
         boolean written = false;
         int timeToWait = 100;
         long totalTimeToWait = 0;
@@ -403,7 +506,7 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
             try {
                 response = restTemplate.getForEntity(urlComplete, JsonNode.class);
             } catch (Exception e) {
-                logger.error("Exception in esBackup", e);
+                logger.error("Exception in the wait of the snapshot of the Zeebe records", e);
                 backupOperation.status = 400;
                 backupOperation.title = e.getMessage();
                 backupOperation.message = "Component[" + CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE + "] Url[" + urlComplete + "]" + e.getMessage();
@@ -413,24 +516,30 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
             JsonNode jsonNode = response.getBody();
             backupOperation.status = response.getStatusCode().value();
 
-            int status = jsonNode == null ? null : jsonNode.path("status").asInt();
-
             logger.info("backup status response for url {}: {}, {}", urlComplete, response.getStatusCode().value(), response.getBody());
             // Check status
             backupIsFinished = true;
-            JsonNode snapshots = jsonNode.path("snapshots");
-            for (JsonNode snapshot : snapshots) {
-                String snapshotName = snapshot.path("snapshot").asText();
-                String state = snapshot.path("state").asText();
-                if (!"SUCCESS".equals(state)) {
-                    backupIsFinished = false;
-                }
-                if (!written) {
-                    operationLog.addSnapshotName(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, snapshotName);
-
+            JsonNode snapshots = jsonNode == null ? null : jsonNode.path("snapshots");
+            if (snapshots != null) {
+                for (JsonNode snapshot : snapshots) {
+                    String snapshotName = snapshot.path("snapshot").asText();
+                    String state = snapshot.path("state").asText();
+                    if ("FAILED".equals(state) || "PARTIAL".equals(state) || "INCOMPATIBLE".equals(state)) {
+                        // it will never be a success: do not wait for ever
+                        backupOperation.status = 500;
+                        backupOperation.title = "Snapshot of the Zeebe records " + snapshotName + " is " + state;
+                        backupOperation.message = "Url[" + urlComplete + "]";
+                        return backupOperation;
+                    }
+                    if (!"SUCCESS".equals(state)) {
+                        backupIsFinished = false;
+                    }
+                    if (!written) {
+                        operationLog.addSnapshotName(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, snapshotName);
+                    }
                 }
             }
-            written = true; //only write once (this can surely be done better :-))
+            written = true; //only write once
         }
         while (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && !backupIsFinished);
         return backupOperation;
@@ -449,22 +558,36 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
 
             JsonNode jsonNode = response.getBody();
             JsonNode snapshots = jsonNode.path("snapshots");
-            List<BackupInfo> listBackups = new ArrayList<>();
+            // One backup per backup id: the history backup (webapps snapshots) and the snapshot of the Zeebe records belong to the same
+            // backup. The snapshot of the Zeebe records exists only when Optimize is active: the history backup is enough.
+            // The snapshots of Optimize are in the backup of Optimize.
+            Map<Long, BackupInfo> backups = new LinkedHashMap<>();
             for (JsonNode snapshot : snapshots) {
-                BackupInfo backupInfo = new BackupInfo();
-
-                String state = snapshot.path("state").asText();
-                backupInfo.status = "SUCCESS".equals(state) ? BackupInfo.Status.COMPLETED : BackupInfo.Status.FAILED;
-                backupInfo.backupId = snapshot.path("snapshot").asInt();
-                backupInfo.components.add(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE);
-                // search the date in the first partition
+                Long snapshotBackupId = secondaryStorageBackupId(snapshot.path("snapshot").asText());
+                if (snapshotBackupId == null) {
+                    continue;
+                }
+                boolean success = "SUCCESS".equals(snapshot.path("state").asText());
                 // value is 2025-05-29T00:16:55.622+0000
-                String timestamp = snapshot.path("start_time").asText();
-                backupInfo.backupTime = Instant.parse(timestamp)
+                java.time.LocalDateTime start = Instant.parse(snapshot.path("start_time").asText())
                         .atZone(ZoneId.systemDefault()) // Use your system's time zone
                         .toLocalDateTime();
-                listBackups.add(backupInfo);
+                BackupInfo backupInfo = backups.get(snapshotBackupId);
+                if (backupInfo == null) {
+                    backupInfo = new BackupInfo();
+                    backupInfo.backupId = snapshotBackupId;
+                    backupInfo.status = BackupInfo.Status.COMPLETED;
+                    backupInfo.components.add(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE);
+                    backupInfo.backupTime = start;
+                    backups.put(snapshotBackupId, backupInfo);
+                } else if (start.isBefore(backupInfo.backupTime)) {
+                    backupInfo.backupTime = start;
+                }
+                if (!success) {
+                    backupInfo.status = BackupInfo.Status.FAILED;
+                }
             }
+            List<BackupInfo> listBackups = new ArrayList<>(backups.values());
             return listBackups;
         } catch (Exception e) {
             logger.error("Can't call [{}] error {}", urlComplete, e);

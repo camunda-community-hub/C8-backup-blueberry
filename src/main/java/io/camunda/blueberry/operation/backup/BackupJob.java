@@ -1,13 +1,16 @@
 package io.camunda.blueberry.operation.backup;
 
-import io.camunda.blueberry.connect.*;
-import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
+import io.camunda.blueberry.connect.BackupComponentInt;
+import io.camunda.blueberry.connect.CamundaApplicationInt;
+import io.camunda.blueberry.connect.OptimizeConnect;
+import io.camunda.blueberry.connect.ZeebeConnect;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.exception.BackupException;
 import io.camunda.blueberry.operation.OperationLog;
+import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,21 +30,37 @@ import java.util.List;
  */
 public class BackupJob {
 
-    private static final int NUMBER_OF_STEPS = 8;
+    public static final String STEP_1_SOFT_PAUSE = "Soft pause";
+    public static final String STEP_2_BACKUP_SECONDARY_STORAGE = "Backup-secondary-storage";
+    public static final String STEP_3_START_OPTIMIZE_BACKUP = "Start Application Backup";
+    public static final String STEP_4_WAIT_SECONDARY_STORAGE_BACKUP = "Wait secondary storage backup";
+    public static final String STEP_5_WAIT_FOR_THE_APPLICATIONS = "Wait for the applications";
+    public static final String STEP_6_BACKUP_ZEEBE_RECORD = "Backup Zeebe Record";
+    public static final String STEP_7_WAIT_FOR_THE_BACKUP_ZEEBE_RECORD = "Wait for the Backup Zeebe Record";
+    public static final String STEP_8_BACKUP_ZEEBE = "Backup Zeebe";
+    public static final String STEP_9_WAIT_ZEEBE_BACKUP = "Wait for Zeebe";
+    public static final String STEP_10_RESUME_ZEEBE_EXPORTING = "Resume Zeebe exporting";
+    private static final int NUMBER_OF_STEPS = 10;
 
     private final OptimizeConnect optimizeConnect;
     private final ZeebeConnect zeebeConnect;
     private final SecondaryStorageFactory secondaryStorageFactory;
+    /**
+     * Optimize needs Elasticsearch, even when the secondary storage is a database: the Zeebe records (zeebe-record*) are snapshotted in it
+     */
+    private final ElasticSearchConnect elasticSearchConnect;
 
     private final OperationLog operationLog;
     private JOBSTATUS jobStatus = JOBSTATUS.PLANNED;
     private long backupId;
 
     protected BackupJob(OptimizeConnect optimizeConnect,
-                        ZeebeConnect zeebeConnect, SecondaryStorageFactory secondaryStorageFactory, OperationLog operationLog) {
+                        ZeebeConnect zeebeConnect, SecondaryStorageFactory secondaryStorageFactory,
+                        ElasticSearchConnect elasticSearchConnect, OperationLog operationLog) {
         this.optimizeConnect = optimizeConnect;
         this.zeebeConnect = zeebeConnect;
         this.secondaryStorageFactory = secondaryStorageFactory;
+        this.elasticSearchConnect = elasticSearchConnect;
         this.operationLog = operationLog;
     }
 
@@ -68,10 +87,7 @@ public class BackupJob {
 
         // Keep only applications existing in the cluster. Operate and Tasklist are not applications any more:
         // their data is in the secondary storage
-        List<CamundaApplicationInt> listApplications = List.<CamundaApplicationInt>of(optimizeConnect)
-                .stream()
-                .filter(CamundaApplicationInt::exist)
-                .toList();
+        List<CamundaApplicationInt> listApplications = List.<CamundaApplicationInt>of(optimizeConnect);
 
         // The secondary storage object is a component like the others
         SecondaryStorageInt secondaryStorage = secondaryStorageFactory.getSecondaryStorage();
@@ -81,31 +97,26 @@ public class BackupJob {
         boolean exportingPaused = false;
         try {
             // 1. Soft pause of the exporting
-            operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBE, "Soft pause of Zeebe exporting");
+            operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.ZEEBE, STEP_1_SOFT_PAUSE, "Soft pause exporting in Zeebe",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#1-soft-pause-exporting-in-zeebe");
             zeebeConnect.softPauseExporting(backupId, operationLog);
             exportingPaused = true;
 
-            // 2. Start the backup of each application
-            List<CamundaApplicationInt> listActivesApplication = new ArrayList<>();
-            operationLog.operationStep(null, "Start the backup of "+listActivesApplication.size()+" applications");
-            for (CamundaApplicationInt application : listApplications) {
-                if (!application.isActive()) {
-                    operationLog.info(application.getComponent(), "Application " + application.getComponent().name() + " is not active, skip it");
-                    continue;
-                }
-                listActivesApplication.add(application);
-                operationLog.info(application.getComponent(), "backup " + application.getComponent().name());
 
-                checkStarted(application, application.backup(backupId, operationLog));
-            }
-
-            // 3. Start the backup of the secondary storage
-            operationLog.operationStep(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Backup-secondary-storage");
+            // 2. Start the backup of the secondary storage
+            operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, STEP_2_BACKUP_SECONDARY_STORAGE, " Start the web applications backup (Secondary storage)",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#2-start-the-web-applications-backup-operate--tasklist");
             boolean secondaryStorageBackedUp = false;
             if (secondaryStorage != null && secondaryStorage.isActive()) {
                 operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Secondary storage [" + secondaryStorage.getName()
                         + "] (" + secondaryStorageParameter.getOriginLabel() + ")");
-                checkStarted(secondaryStorage, secondaryStorage.backup(backupId, operationLog));
+                if (secondaryStorage instanceof ElasticSearchConnect elasticsearch) {
+                    // Elasticsearch: the history backup (Operate, Tasklist). The snapshot of the Zeebe records is the step 6
+                    checkStarted(secondaryStorage, elasticsearch.backupApplication(backupId, operationLog));
+                } else {
+                    // a database: its own backup
+                    checkStarted(secondaryStorage, secondaryStorage.backup(backupId, operationLog));
+                }
                 secondaryStorageBackedUp = true;
             } else if (secondaryStorage != null) {
                 operationLog.info(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Secondary storage [" + secondaryStorage.getName()
@@ -123,28 +134,72 @@ public class BackupJob {
                         + "and blueberry.secondaryStorage is not set): it is not backed up");
             }
 
-            // 4. Wait for the end of the applications, then of the secondary storage
-            operationLog.operationStep(null, "Wait for the applications");
-            for (CamundaApplicationInt application : listActivesApplication) {
-                checkFinished(application, application.waitBackup(backupId, operationLog));
-            }
-            operationLog.operationStep(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, "Wait for the secondary storage");
-            if (secondaryStorageBackedUp) {
-                checkFinished(secondaryStorage, secondaryStorage.waitBackup(backupId, operationLog));
+
+            // 3. Start the backup of each application
+            operationLog.startOperationStep(null, STEP_3_START_OPTIMIZE_BACKUP, "Start Optimize backup",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#3-start-the-optimize-backup");
+            if (!optimizeConnect.isActive()) {
+                operationLog.info(optimizeConnect.getComponent(), "Optimize is not active, skipped");
+            } else {
+                checkStarted(optimizeConnect, optimizeConnect.backup(backupId, operationLog));
             }
 
-            // 5. Backup of Zeebe, after the secondary storage, as the documentation says
-            operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBE, "Backup Zeebe");
+
+            // 4. Wait for the end of the applications, then of the secondary storage
+            operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, STEP_4_WAIT_SECONDARY_STORAGE_BACKUP, "Wait the secondary storage ["+ secondaryStorage.getName()+"] backup to complete",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#4-wait-for-the-web-applications-backup-to-complete");
+            if (secondaryStorageBackedUp) {
+                if (secondaryStorage instanceof ElasticSearchConnect elasticsearch) {
+                    checkFinished(secondaryStorage, elasticsearch.waitBackupApplication(backupId, operationLog));
+                } else {
+                    checkFinished(secondaryStorage, secondaryStorage.waitBackup(backupId, operationLog));
+                }
+            }
+
+            // 5. Wait for optimize
+            operationLog.startOperationStep(null, STEP_5_WAIT_FOR_THE_APPLICATIONS, "Wait for the Optimize backup to complete",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#5-wait-for-the-optimize-backup-to-complete");
+            if (!optimizeConnect.isActive()) {
+                operationLog.info(optimizeConnect.getComponent(), "Optimize is not active, skipped");
+            } else {
+                checkFinished(optimizeConnect, optimizeConnect.waitBackup(backupId, operationLog));
+            }
+
+            // 6.Backup zeebe record
+            operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.ZEEBE, STEP_6_BACKUP_ZEEBE_RECORD, "Create the Zeebe records backup",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#6-create-a-backup-of-the-exported-zeebe-indices-in-elasticsearchopensearch");
+            if (!optimizeConnect.isActive()) {
+                operationLog.info(optimizeConnect.getComponent(), "Optimize is not active, skipped");
+            } else {
+                requireElasticsearchForOptimize();
+                checkStarted(elasticSearchConnect, elasticSearchConnect.backupZeebeRecord(backupId, operationLog));
+            }
+
+            // 7. Wait for zeebe record
+            operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.ZEEBE, STEP_7_WAIT_FOR_THE_BACKUP_ZEEBE_RECORD, "Wait for the Zeebe record to be complete",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#7-wait-for-the-backup-of-the-exported-zeebe-indices-to-complete-before-proceeding");
+            if (!optimizeConnect.isActive()) {
+                operationLog.info(optimizeConnect.getComponent(), "Optimize is not active, skipped");
+            } else {
+                checkFinished(elasticSearchConnect, elasticSearchConnect.waitZeebeRecord(backupId, operationLog));
+            }
+            // 8. Backup of Zeebe, after the secondary storage, as the documentation says
+            operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.ZEEBE, STEP_8_BACKUP_ZEEBE, "Create the Zeebe broker backup",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#8-create-the-zeebe-broker-backup");
             checkStarted(zeebeConnect, zeebeConnect.backup(backupId, operationLog));
-            operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBE, "Wait for Zeebe");
+
+            // 9. wait for the zeebe PVC
+            operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.ZEEBE, STEP_9_WAIT_ZEEBE_BACKUP, "Wait the Zeebe backup to complete",
+                    "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#9-wait-for-the-zeebe-backup-to-complete-before-proceeding");
             checkFinished(zeebeConnect, zeebeConnect.waitBackup(backupId, operationLog));
         } catch (BackupException e) {
             this.jobStatus = JOBSTATUS.FAILED;
             throw e;
         } finally {
-            // 6. The exporting must be resumed in all cases
+            // 10. The exporting must be resumed in all cases
             if (exportingPaused) {
-                operationLog.operationStep(CamundaApplicationInt.COMPONENT.ZEEBE, "Resume Zeebe exporting");
+                operationLog.startOperationStep(CamundaApplicationInt.COMPONENT.ZEEBE, STEP_10_RESUME_ZEEBE_EXPORTING, " Resume exporting in Zeebe",
+                        "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/elasticsearch/es-backup/#10-resume-exporting-in-zeebe");
                 zeebeConnect.resumeExporting(operationLog);
             }
         }
@@ -152,6 +207,19 @@ public class BackupJob {
         operationLog.endOperation();
 
         jobStatus = JOBSTATUS.COMPLETED;
+    }
+
+    /**
+     * Optimize reads the Zeebe records in Elasticsearch, even when the secondary storage is a database: Elasticsearch must be configured
+     * (blueberry.elasticsearch.enabled and blueberry.elasticsearchurl), else the backup would not contain the Zeebe records
+     */
+    private void requireElasticsearchForOptimize() throws BackupException {
+        if (!elasticSearchConnect.isPresent()) {
+            this.jobStatus = JOBSTATUS.FAILED;
+            throw new BackupException(CamundaApplicationInt.COMPONENT.SECONDARYSTORAGE, 400,
+                    "Elasticsearch is not configured",
+                    "Optimize is active and needs Elasticsearch for the snapshot of the Zeebe records: set blueberry.elasticsearch.enabled and blueberry.elasticsearchurl", backupId);
+        }
     }
 
     /**

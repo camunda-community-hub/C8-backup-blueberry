@@ -121,7 +121,7 @@ public class RuleOptimizeRepository implements Rule {
             } else {
                 // if we don't execute the rule, we stop here on a failure
                 if (!execute) {
-                    ruleInfo.addError("Repository does not exist in Elastic search, and must be created");
+                    ruleInfo.addError("The snapshot repository [" + optimizeRepository + "] does not exist in Elasticsearch: use Configure to create it");
                     ruleInfo.setStatus(RuleStatus.FAILED);
                 }
             }
@@ -135,7 +135,7 @@ public class RuleOptimizeRepository implements Rule {
                     orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
                     blueberryConfig.getOptimizeContainerBasePath());
             if (operationResult.success) {
-                ruleInfo.addDetails("Repository is created in ElasticSearch");
+                ruleInfo.addActivity("Repository is created in ElasticSearch", RuleStatus.DONEWITHSUCCESS, operationResult.command);
             } else {
                 ruleInfo.addError("Error when creating the repository in ElasticSearch :" + operationResult.details);
                 ruleInfo.setStatus(RuleStatus.FAILED);

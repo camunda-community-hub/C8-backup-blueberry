@@ -6,7 +6,6 @@ import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageFactory;
 import io.camunda.blueberry.connect.secondary.SecondaryStorageInt;
 import io.camunda.blueberry.platform.componentconfig.OrchestrationParameter;
-import org.springframework.boot.autoconfigure.jmx.ParentAwareNamingStrategy;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -24,15 +23,13 @@ public class RuleSecondaryStorage implements Rule {
     private final OrchestrationParameter orchestrationParameter;
     private final ElasticSearchConnect elasticSearchConnect;
     private final BlueberryConfig blueberryConfig;
-    private final ParentAwareNamingStrategy parentAwareNamingStrategy;
 
     RuleSecondaryStorage(SecondaryStorageFactory secondaryStorageFactory, OrchestrationParameter orchestrationParameter,
-                         ElasticSearchConnect elasticSearchConnect, BlueberryConfig blueberryConfig, ParentAwareNamingStrategy parentAwareNamingStrategy) {
+                         ElasticSearchConnect elasticSearchConnect, BlueberryConfig blueberryConfig) {
         this.secondaryStorageFactory = secondaryStorageFactory;
         this.orchestrationParameter = orchestrationParameter;
         this.elasticSearchConnect = elasticSearchConnect;
         this.blueberryConfig = blueberryConfig;
-        this.parentAwareNamingStrategy = parentAwareNamingStrategy;
     }
 
     @Override
@@ -151,9 +148,10 @@ public class RuleSecondaryStorage implements Rule {
         OperationResult created = elasticSearchConnect.createRepository(name,
                 orchestrationParameter.getParameterString(OrchestrationParameter.CONTAINER_CONTAINERTYPE),
                 blueberryConfig.getZeebeRecordContainerBasePath());
-        ruleInfo.addVerifications("Create the snapshot repository [" + name + "] (" + origin + ") in Elasticsearch",
-                created.success ? RuleStatus.CORRECT : RuleStatus.FAILED, created.command);
-        if (!created.success) {
+        if (created.success) {
+            ruleInfo.addActivity("Snapshot repository [" + name + "] (" + origin + ") is created in Elasticsearch", RuleStatus.DONEWITHSUCCESS, created.command);
+        } else {
+            ruleInfo.addVerifications("Create the snapshot repository [" + name + "] (" + origin + ") in Elasticsearch", RuleStatus.FAILED, created.command);
             ruleInfo.addError("Error when creating the snapshot repository in Elasticsearch: " + created.details);
             ruleInfo.setStatus(RuleStatus.FAILED);
         }

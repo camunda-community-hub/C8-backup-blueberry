@@ -69,20 +69,28 @@ public class RestoreApiExecutor {
     /** Number of steps (operationStep) of the restore: the version profile gives the same list */
     public static final int NUMBER_OF_STEPS = 5;
 
+    public static final String STEP_VALIDATE = "Validate";
+    public static final String STEP_RECOVERY_MODE = "Recovery mode";
+    public static final String STEP_SECONDARY_STORAGE = "Restore secondary storage";
+    public static final String STEP_RESTORE_ZEEBE = "Restore Zeebe";
+    public static final String STEP_WAIT_PROCESSING = "Wait for processing";
+    /** The documentation of the restore */
+    public static final String RESTORE_DOC = "https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/restore/";
+
     public void execute(long backupId, OperationLog log) throws OperationException {
         // 1. Validate
-        log.operationStep(ZEEBE, "Validate the backup and the cluster");
+        log.startOperationStep(ZEEBE, STEP_VALIDATE, "Validate the backup and the cluster", RESTORE_DOC);
         SecondaryStorageInt secondaryStorage = validate(backupId, log);
 
         // 2. Recovery mode
-        log.operationStep(ZEEBE, "Enter the recovery mode");
+        log.startOperationStep(ZEEBE, STEP_RECOVERY_MODE, "Enter the recovery mode", RESTORE_DOC);
         enterRecoveryMode(log);
 
         boolean somethingDeleted = false;
         boolean zeebeRestoreStarted = false;
         try {
             // 3. The secondary storage
-            log.operationStep(STORAGE, "Restore the secondary storage [" + secondaryStorage.getName() + "]");
+            log.startOperationStep(STORAGE, STEP_SECONDARY_STORAGE, "Restore the secondary storage [" + secondaryStorage.getName() + "]", RESTORE_DOC);
             if (!secondaryStorage.isDatabase()) {
                 // Elasticsearch: nothing is deleted before the restore of Zeebe is known to be possible
                 dryRun(backupId, log);
@@ -91,7 +99,7 @@ public class RestoreApiExecutor {
             secondaryStorage.restore(backupId, log);
 
             // 4. Zeebe
-            log.operationStep(ZEEBE, "Restore Zeebe");
+            log.startOperationStep(ZEEBE, STEP_RESTORE_ZEEBE, "Restore Zeebe", RESTORE_DOC);
             if (secondaryStorage.isDatabase()) {
                 // The restore of Zeebe reads the exporter position in the restored database
                 dryRun(backupId, log);
@@ -100,7 +108,7 @@ public class RestoreApiExecutor {
             restoreZeebe(backupId, log);
 
             // 5. The cluster is back
-            log.operationStep(ZEEBE, "Wait for the end of the recovery mode");
+            log.startOperationStep(ZEEBE, STEP_WAIT_PROCESSING, "Wait for the end of the recovery mode", RESTORE_DOC);
             waitProcessing(log);
         } catch (OperationException | RuntimeException e) {
             handleFailure(somethingDeleted, zeebeRestoreStarted, log);

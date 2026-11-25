@@ -32,7 +32,7 @@ public interface Rule {
     /**
      * INFO is only used on a verification: it gives an information, it is neither a success nor an error
      */
-    enum RuleStatus {DEACTIVATED, CORRECT, FAILED, INPROGRESS, FAILEDBUTWILLBEFIXED, INFO}
+    enum RuleStatus {DEACTIVATED, CORRECT, FAILED, INPROGRESS, FAILEDBUTWILLBEFIXED, INFO, DONEWITHSUCCESS}
 
 
     /**

@@ -268,7 +268,7 @@ class Restore extends React.Component {
                         </tr>
                         <tr>
                             <td>Advancement</td>
-                            <td>{m.step != null ? m.step : "—"} / {m.totalNumberOfSteps != null ? m.totalNumberOfSteps : "—"}</td>
+                            <td>{m.step != null ? m.step : "—"} / {m.totalSteps != null ? m.totalSteps : "—"}</td>
                         </tr>
                         <tr>
                             <td>Current operation</td>
@@ -296,7 +296,7 @@ class Restore extends React.Component {
                         <p style={{marginTop: "8px"}}>
                             <a href={m.docsRestoreUrl} target="_blank" rel="noreferrer">Restore documentation</a>
                         </p>}
-                    {renderOperationLogMessages(m.messages)}
+                    {renderOperationLogMessages(m.messages, m.totalSteps)}
                 </Card.Body>
             </Card>
         );

@@ -2,6 +2,7 @@ package io.camunda.blueberry.platform.rule;
 
 import io.camunda.blueberry.config.BlueberryConfig;
 import io.camunda.blueberry.connect.OptimizeConnect;
+import io.camunda.blueberry.connect.secondary.ElasticSearchConnect;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -15,16 +16,20 @@ import java.util.List;
  *     <li>CORRECT, with an information: no URL to ask, or Optimize does not answer and blueberry.optimize.enabled is false</li>
  *     <li>FAILED: blueberry.optimize.enabled is true, but Optimize does not answer</li>
  * </ul>
+ * When Optimize is present, Elasticsearch must be present too (Optimize reads the Zeebe records in it, even when the secondary storage
+ * is a database): a verification checks it, FAILED if Elasticsearch is not there.
  * Each verification gives the value in [] and its origin in ().
  */
 @Component
 public class RuleOptimizePresent implements Rule {
     private final BlueberryConfig blueberryConfig;
     private final OptimizeConnect optimizeConnect;
+    private final ElasticSearchConnect elasticSearchConnect;
 
-    RuleOptimizePresent(BlueberryConfig blueberryConfig, OptimizeConnect optimizeConnect) {
+    RuleOptimizePresent(BlueberryConfig blueberryConfig, OptimizeConnect optimizeConnect, ElasticSearchConnect elasticSearchConnect) {
         this.blueberryConfig = blueberryConfig;
         this.optimizeConnect = optimizeConnect;
+        this.elasticSearchConnect = elasticSearchConnect;
     }
 
     @Override
@@ -71,7 +76,34 @@ public class RuleOptimizePresent implements Rule {
                     "Optimize is not in the cluster");
             ruleInfo.setStatus(RuleStatus.CORRECT);
         }
+
+        // Optimize is in the cluster: Elasticsearch must be there too
+        if (optimizeConnect.isActive()) {
+            checkElasticsearch(ruleInfo);
+        }
         return ruleInfo;
+    }
+
+    /**
+     * Optimize reads the Zeebe records in Elasticsearch, even when the secondary storage is a database. The cluster answers first (Elasticsearch
+     * answers on its URL), then the configuration (blueberry.elasticsearch.enabled)
+     */
+    private void checkElasticsearch(RuleInfo ruleInfo) {
+        String url = blueberryConfig.getElasticsearchUrl();
+        if (elasticSearchConnect.isConnected()) {
+            ruleInfo.addVerifications("Elasticsearch (needed by Optimize) answers on [" + url + "] (actuator)", RuleStatus.CORRECT, url);
+            return;
+        }
+        String problem;
+        if (elasticSearchConnect.isActive()) {
+            ruleInfo.addVerifications("Elasticsearch is enabled [true] (config) but does not answer on [" + url + "] (actuator)", RuleStatus.FAILED, url);
+            problem = "Optimize needs Elasticsearch for the snapshot of the Zeebe records, and it does not answer on [" + url + "]";
+        } else {
+            ruleInfo.addVerifications("Elasticsearch is not present: [" + url + "] (config)", RuleStatus.FAILED, url);
+            problem = "Optimize needs Elasticsearch, even when the secondary storage is a database: set blueberry.elasticsearch.enabled and blueberry.elasticsearchurl";
+        }
+        ruleInfo.addError(problem);
+        ruleInfo.setStatus(RuleStatus.FAILED);
     }
 
     @Override
