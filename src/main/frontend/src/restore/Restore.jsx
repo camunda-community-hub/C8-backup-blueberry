@@ -24,7 +24,7 @@ class Restore extends React.Component {
         super();
         this.state = {
             listBackups: [],
-            phases: [],
+            steps: [],
             executionEnabled: false,
             executionConfigured: false,
             procedure: "",
@@ -46,7 +46,8 @@ class Restore extends React.Component {
 
     componentDidMount() {
         this.refreshListBackup();
-        this.loadPhases();
+        this.loadSteps();
+        this.loadExecution();
         this.loadReadiness();
         this.monitorRestore();
         this.monitorInterval = setInterval(this.monitorRestore, 5000);
@@ -56,12 +57,19 @@ class Restore extends React.Component {
         clearInterval(this.monitorInterval);
     }
 
-    loadPhases() {
-        RestCallService.getInstance().getJson('blueberry/api/restore/phases?', this, (httpPayload) => {
+    loadSteps() {
+        RestCallService.getInstance().getJson('blueberry/api/restore/steps?', this, (httpPayload) => {
+            if (!httpPayload.isError()) {
+                this.setState({steps: httpPayload.getData().steps || []});
+            }
+        });
+    }
+
+    loadExecution() {
+        RestCallService.getInstance().getJson('blueberry/api/restore/execution?', this, (httpPayload) => {
             if (!httpPayload.isError()) {
                 const data = httpPayload.getData();
                 this.setState({
-                    phases: data.phases || [],
                     // one source for the tag and the buttons: blueberry.restore.execution
                     executionEnabled: data.executionConfigured === true,
                     executionConfigured: data.executionConfigured === true,
@@ -159,7 +167,8 @@ class Restore extends React.Component {
                             onClick={() => {
                                 this.refreshListBackup();
                                 this.loadReadiness();
-                                this.loadPhases();
+                                this.loadSteps();
+                                this.loadExecution();
                                 this.monitorRestore();
                             }}
                             disabled={this.state.display.loading}>
@@ -170,15 +179,13 @@ class Restore extends React.Component {
                 <BackupListTable rows={this.state.listBackups}
                                  renderAction={(row) => this.renderRestoreButton(row)}/>
 
-                {this.state.phases.length > 0 &&
+                {this.state.steps.length > 0 &&
                     <Card style={{marginTop: "16px"}}>
                         <Card.Header>Restore steps</Card.Header>
                         <Card.Body>
                             <ul style={{listStyle: "none", paddingLeft: 0}}>
-                                {this.state.phases.map((p, index) =>
-                                    <li key={p.id}>
-                                        &bull; {index + 1}. {p.title} {p.kind === "MANUAL" && <Tag type="gray">Manual</Tag>}
-                                    </li>)}
+                                {this.state.steps.map((step) =>
+                                    <li key={step.number}>&bull; {step.name}</li>)}
                             </ul>
                             <p className="text-muted" style={{marginTop: "8px"}}>
                                 The restore must be validated manually: open Operate, Tasklist and Optimize,
@@ -340,7 +347,8 @@ class Restore extends React.Component {
     }
 
     openConfirm(row) {
-        this.loadPhases();
+        this.loadSteps();
+        this.loadExecution();
         this.loadReadiness();
         this.setState({
             selectedBackup: row,

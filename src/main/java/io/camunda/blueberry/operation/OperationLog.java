@@ -88,6 +88,18 @@ public class OperationLog {
         mergeMessage(msg);
     }
 
+    public void appendInfo(String information) {
+        if (listMessages.isEmpty())
+            return;
+        Message last = listMessages.getLast();
+        if (last.content.isEmpty())
+            last.content.add(information);
+        else {
+            String total = last.content.getLast() + ", " + information;
+            last.content.set(last.content.size() - 1, total);
+
+        }
+    }
     public void warning(BackupComponentInt.COMPONENT component, String message) {
         logger.error(getBanner() + message);
         Message msg = new Message();

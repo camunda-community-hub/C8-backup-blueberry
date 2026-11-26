@@ -35,14 +35,27 @@ public class RestoreRestController {
         return restoreEnvironmentCheck.readiness();
     }
 
-    @GetMapping(value = "/api/restore/phases", produces = "application/json")
-    public Map<String, Object> phases() {
-        // The steps of the restore are fixed: see RestoreJob
-        List<Map<String, Object>> phaseMaps = RestoreJob.STEPS.stream()
-                .map(step -> Map.<String, Object>of("id", step, "title", step, "kind", "AUTOMATED"))
-                .collect(Collectors.toList());
+    /**
+     * The steps of the restore, in the order of the job: the list of RestoreJob.STEPS. The Restore page displays it.
+     */
+    @GetMapping(value = "/api/restore/steps", produces = "application/json")
+    public Map<String, Object> steps() {
+        List<Map<String, Object>> stepMaps = new java.util.ArrayList<>();
+        for (int i = 0; i < RestoreJob.STEPS.size(); i++) {
+            stepMaps.add(Map.of("number", i + 1, "name", RestoreJob.STEPS.get(i)));
+        }
         Map<String, Object> result = new HashMap<>();
-        result.put("phases", phaseMaps);
+        result.put("steps", stepMaps);
+        result.put("docsRestoreUrl", RestoreJob.RESTORE_DOC);
+        return result;
+    }
+
+    /**
+     * Does the configuration allow the live restore (blueberry.restore.execution)?
+     */
+    @GetMapping(value = "/api/restore/execution", produces = "application/json")
+    public Map<String, Object> execution() {
+        Map<String, Object> result = new HashMap<>();
         result.put("executionEnabled", restoreManager.isLiveRestoreEnabled());
         // Why the live restore can be off: the configuration (blueberry.restore.execution)
         result.put("executionConfigured", restoreManager.isExecutionConfigured());

@@ -45,8 +45,8 @@ class RestorePreflightTest {
     @Test
     void theStepsOfTheRestoreAreFixed() {
         assertEquals(List.of(RestoreJob.STEP_1_VALIDATE, RestoreJob.STEP_2_STOP_OPTIMIZE, RestoreJob.STEP_3_RECOVERY_MODE,
-                RestoreJob.STEP_4_RESTORE_SECONDARY_STORAGE, RestoreJob.STEP_5_RESTORE_ZEEBE, RestoreJob.STEP_6_WAIT_PROCESSING),
+                RestoreJob.STEP_4_RESTORE_SECONDARY_STORAGE, RestoreJob.STEP_5_RESTORE_ZEEBE, RestoreJob.STEP_6_WAIT_PROCESSING, RestoreJob.STEP_7_RESTART_OPTIMIZE),
                 RestoreJob.STEPS);
-        assertEquals(6, RestoreJob.NUMBER_OF_STEPS);
+        assertEquals(7, RestoreJob.NUMBER_OF_STEPS);
     }
 }

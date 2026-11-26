@@ -32,7 +32,7 @@ class Backup extends React.Component {
             listBackups: [],
             listUrlsBackup: [],
             currentBackup: {statusBackup: ""},
-            backupPhases: [],
+            backupSteps: [],
             backupConfiguration: {mode: "", schedule: "", retentionWindow: ""},
             docsBackupUrl: ""
 
@@ -42,7 +42,7 @@ class Backup extends React.Component {
 
     componentDidMount() {
         this.refreshListBackups();
-        this.loadBackupPhases();
+        this.loadBackupSteps();
         this.loadBackupConfiguration();
         this.monitorBackup();
 
@@ -159,7 +159,7 @@ class Backup extends React.Component {
                             onClick={() => {
                                 this.refreshListBackups();
                                 this.monitorBackup();
-                                this.loadBackupPhases();
+                                this.loadBackupSteps();
                                 this.loadBackupConfiguration();
                             }}
                             disabled={this.state.display.loading}>
@@ -167,15 +167,13 @@ class Backup extends React.Component {
                     </Button>
                 </div>
 
-                {this.state.backupPhases.length > 0 &&
+                {this.state.backupSteps.length > 0 &&
                     <Card style={{marginTop: "16px"}}>
                         <Card.Header>Backup steps</Card.Header>
                         <Card.Body>
                             <ul style={{listStyle: "none", paddingLeft: 0}}>
-                                {this.state.backupPhases.map((p, index) =>
-                                    <li key={p.id}>
-                                        &bull; {index + 1}. {p.title} {p.kind === "MANUAL" && <Tag type="gray">Manual</Tag>}
-                                    </li>)}
+                                {this.state.backupSteps.map((step) =>
+                                    <li key={step.number}>&bull; {step.name}</li>)}
                             </ul>
                             {this.state.docsBackupUrl &&
                                 <p className="text-muted" style={{marginTop: "8px", marginBottom: 0}}>
@@ -324,12 +322,12 @@ class Backup extends React.Component {
         );
     }
 
-    loadBackupPhases() {
-        RestCallService.getInstance().getJson('blueberry/api/backup/phases?', this, (httpPayload) => {
+    loadBackupSteps() {
+        RestCallService.getInstance().getJson('blueberry/api/backup/steps?', this, (httpPayload) => {
             if (!httpPayload.isError()) {
                 const data = httpPayload.getData();
                 this.setState({
-                    backupPhases: data.phases || [],
+                    backupSteps: data.steps || [],
                     docsBackupUrl: data.docsBackupUrl || ""
                 });
             }

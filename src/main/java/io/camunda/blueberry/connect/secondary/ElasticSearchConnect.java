@@ -170,15 +170,17 @@ public class ElasticSearchConnect implements SecondaryStorageInt {
     public void restore(long backupId, OperationLog operationLog) throws OperationException {
         List<ElasticsearchSnapshotPlan.Planned> plan = planSnapshots(backupId);
 
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Delete indexes ("+listIndices().size()+") : ");
         for (String index : listIndices()) {
             if (ElasticsearchSnapshotPlan.isCamundaIndex(index)) {
-                operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Delete the index " + index);
+                operationLog.appendInfo(index);
                 deleteIndex(index);
             }
         }
+
+        operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Restore snapshots ("+plan.size()+") : ");
         for (ElasticsearchSnapshotPlan.Planned snapshot : plan) {
-            operationLog.info(BackupComponentInt.COMPONENT.SECONDARYSTORAGE, "Restore the snapshot " + snapshot.name()
-                    + " from the repository " + snapshot.repository());
+            operationLog.appendInfo(snapshot.name()+" from repository "+snapshot.repository());
             restoreSnapshot(snapshot.repository(), snapshot.name());
         }
     }

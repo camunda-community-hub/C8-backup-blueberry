@@ -29,8 +29,8 @@ import java.util.List;
  */
 public class BackupJob {
 
-    public static final String STEP_1_SOFT_PAUSE = "Soft pause";
-    public static final String STEP_2_BACKUP_SECONDARY_STORAGE = "#1 Backup Secondary Storage";
+    public static final String STEP_1_SOFT_PAUSE = "#1 Soft pause";
+    public static final String STEP_2_BACKUP_SECONDARY_STORAGE = "#2 Backup Secondary Storage";
     public static final String STEP_3_START_OPTIMIZE_BACKUP = "#3 Start Optimize Backup";
     public static final String STEP_4_WAIT_SECONDARY_STORAGE_BACKUP = "#4 Wait secondary storage backup";
     public static final String STEP_5_WAIT_FOR_OPTIMIZE = "#5 Wait for Optimize";
@@ -40,13 +40,13 @@ public class BackupJob {
     public static final String STEP_9_WAIT_ZEEBE_BACKUP = "#9 Wait for Zeebe";
     public static final String STEP_10_RESUME_ZEEBE_EXPORTING = "#10 Resume Zeebe exporting";
 
+    /**
+     * The steps of the backup, always in this order. The Backup page asks for this list (/api/backup/steps)
+     */
     public static final List<String> STEPS = List.of(STEP_1_SOFT_PAUSE, STEP_2_BACKUP_SECONDARY_STORAGE, STEP_3_START_OPTIMIZE_BACKUP,
             STEP_4_WAIT_SECONDARY_STORAGE_BACKUP, STEP_5_WAIT_FOR_OPTIMIZE, STEP_6_BACKUP_ZEEBE_RECORD,
             STEP_7_WAIT_FOR_THE_BACKUP_ZEEBE_RECORD, STEP_8_BACKUP_ZEEBE, STEP_9_WAIT_ZEEBE_BACKUP, STEP_10_RESUME_ZEEBE_EXPORTING);
     public static final int NUMBER_OF_STEPS = STEPS.size();
-    /**
-     * The steps of the backup, always in this order
-     */
     /**
      * The documentation of the backup
      */

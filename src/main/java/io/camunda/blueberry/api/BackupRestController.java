@@ -93,14 +93,17 @@ public class BackupRestController {
         return parameter == null || parameter.getValue() == null ? "" : parameter.getOrigin().name();
     }
 
-    @GetMapping(value = "/api/backup/phases", produces = "application/json")
-    public Map<String, Object> phases() {
-        // The steps of the backup are fixed: see BackupJob
-        List<Map<String, Object>> phaseMaps = BackupJob.STEPS.stream()
-                .map(step -> Map.<String, Object>of("id", step, "title", step, "kind", "AUTOMATED"))
-                .collect(Collectors.toList());
+    /**
+     * The steps of the backup, in the order of the job: the list of BackupJob.STEPS. The Backup page displays it.
+     */
+    @GetMapping(value = "/api/backup/steps", produces = "application/json")
+    public Map<String, Object> steps() {
+        List<Map<String, Object>> stepMaps = new java.util.ArrayList<>();
+        for (int i = 0; i < BackupJob.STEPS.size(); i++) {
+            stepMaps.add(Map.of("number", i + 1, "name", BackupJob.STEPS.get(i)));
+        }
         Map<String, Object> result = new HashMap<>();
-        result.put("phases", phaseMaps);
+        result.put("steps", stepMaps);
         result.put("docsBackupUrl", BackupJob.BACKUP_DOC);
         return result;
     }

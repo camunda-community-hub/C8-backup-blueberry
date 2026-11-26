@@ -18,14 +18,15 @@ import java.util.List;
  * The restore follows the procedure of the documentation (Camunda 8.8 and over, the Restore API):
  * https://docs.camunda.io/docs/self-managed/operational-guides/backup-restore/backup-and-restore/
  * <ol>
- *   <li>Stop Optimize: its indices are deleted and restored with the others (Kubernetes or Docker, see ClusterConnect)</li>
  *   <li>Validate: the Zeebe backup is complete, the secondary storage has the backup</li>
+ *   <li>Stop Optimize: its indices are deleted and restored with the others (Kubernetes or Docker, see ClusterConnect)</li>
  *   <li>PATCH /v2/mode?mode=RECOVERING: the brokers stop processing</li>
  *   <li>Restore the secondary storage (the cluster stays in recovery mode):
  *     <ul><li>Elasticsearch: dry run of the restore of Zeebe, delete the indices, restore the snapshots one by one</li>
  *     <li>A database: restore with the native tool of the database</li></ul></li>
  *   <li>POST /v2/restore {"backupIds": [id]} (after a dry run for a database), wait with GET /v2/restore</li>
- *   <li>The cluster leaves the recovery mode itself: check GET /v2/topology, then start Optimize</li>
+ *   <li>The cluster leaves the recovery mode itself: check GET /v2/topology</li>
+ *   <li>Restart Optimize</li>
  * </ol>
  * <p>
  * <b>Consistency</b>: {@link #isConsistent()} is true as long as the platform is in a state that works: unchanged, or restored.
@@ -44,11 +45,13 @@ public class RestoreJob {
     public static final String STEP_4_RESTORE_SECONDARY_STORAGE = "#4 Restore secondary storage";
     public static final String STEP_5_RESTORE_ZEEBE = "#5 Restore Zeebe";
     public static final String STEP_6_WAIT_PROCESSING = "#6 Wait for processing";
+    public static final String STEP_7_RESTART_OPTIMIZE = "#7 Restart Optimize";
     /**
-     * The steps of the restore, always in this order
+     * The steps of the restore, always in this order. The Restore page asks for this list (/api/restore/steps)
      */
     public static final List<String> STEPS = List.of(STEP_1_VALIDATE, STEP_2_STOP_OPTIMIZE, STEP_3_RECOVERY_MODE,
-            STEP_4_RESTORE_SECONDARY_STORAGE, STEP_5_RESTORE_ZEEBE, STEP_6_WAIT_PROCESSING);
+            STEP_4_RESTORE_SECONDARY_STORAGE, STEP_5_RESTORE_ZEEBE, STEP_6_WAIT_PROCESSING,
+            STEP_7_RESTART_OPTIMIZE);
     public static final int NUMBER_OF_STEPS = STEPS.size();
     /**
      * The documentation of the restore
@@ -311,16 +314,21 @@ public class RestoreJob {
             // The secondary storage and Zeebe hold the data of the backup: the platform is consistent again
             consistent = true;
 
-            // 6. The cluster leaves the recovery mode itself, then Optimize can start
+            // 6. The cluster leaves the recovery mode itself
             operationLog.startOperationStep(BackupComponentInt.COMPONENT.ZEEBE, STEP_6_WAIT_PROCESSING, "Wait for the end of the recovery mode", RESTORE_DOC);
             waitUntil("the end of the recovery mode", () -> {
                 ZeebeRestApi.RestResult processingTopology = rest.getTopology();
                 return processingTopology.isSuccess() && processingTopology.body() != null && !anyPartitionRecovering(processingTopology.body());
             });
             operationLog.info(BackupComponentInt.COMPONENT.ZEEBE, "The cluster left the recovery mode: " + rest.getBaseUrl() + "/topology");
+
+            // 7. Restart Optimize, stopped by the step 2. It starts on the restored indices
+            operationLog.startOperationStep(BackupComponentInt.COMPONENT.OPTIMIZE, STEP_7_RESTART_OPTIMIZE, "Restart Optimize", RESTORE_DOC);
             if (optimizeReplicas > 0) {
                 optimizeConnect.start(optimizeReplicas, operationLog);
                 optimizeStarted = true;
+            } else {
+                operationLog.info(optimizeConnect.getComponent(), "Optimize was not stopped by this restore: nothing to start");
             }
 
             operationLog.endOperation();
